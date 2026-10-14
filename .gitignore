@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+server/dist/
+server/public/
+
+# Environment
+.env
+.env.*
+.env.local
+
+# Database (regenerate via prisma migrate + seed)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Generated runtime files
+server/pdfs/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/

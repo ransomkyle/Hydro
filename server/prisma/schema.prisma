@@ -1,0 +1,223 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Organization {
+  id               String     @id @default(uuid())
+  name             String
+  subscriptionTier String     @default("Starter") // "Starter", "Pro", "Enterprise"
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  users            User[]
+  customers        Customer[]
+  properties       Property[]
+  jobs             Job[]
+  parts            Part[]
+  warehouses       Warehouse[]
+  quotes           Quote[]
+  invoices         Invoice[]
+  designs          Design[]
+
+  @@map("organizations")
+}
+
+model User {
+  id           String       @id @default(uuid())
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  email        String       @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         String       @default("technician") // "admin", "dispatcher", "technician"
+  phone        String?
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  jobs         Job[]        @relation("AssignedTech")
+  warehouses   Warehouse[]
+
+  @@map("users")
+}
+
+model Customer {
+  id           String       @id @default(uuid())
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  firstName    String
+  lastName     String
+  email        String?
+  phone        String?
+  portalCode   String?   @unique // Unique code for customer portal login (auto-generated)
+  notes        String?
+  createdAt    DateTime     @default(now())
+  properties   Property[]
+  invoices     Invoice[]
+  designs      Design[]
+
+  @@map("customers")
+}
+
+model Property {
+  id                   String       @id @default(uuid())
+  customerId           String
+  customer             Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orgId                String
+  organization         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  streetAddress        String
+  city                 String
+  state                String
+  zipCode              String
+  latitude             Float?
+  longitude            Float?
+  irrigationZonesCount Int          @default(1)
+  waterShutoffLocation String?
+  createdAt            DateTime     @default(now())
+  jobs                 Job[]
+  quotes               Quote[]
+  designs              Design[]
+
+  @@map("properties")
+}
+
+model Job {
+  id             String         @id @default(uuid())
+  orgId          String
+  organization   Organization   @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  propertyId     String
+  property       Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  assignedTechId String?
+  assignedTech   User?          @relation("AssignedTech", fields: [assignedTechId], references: [id], onDelete: SetNull)
+  status         String         @default("scheduled") // "scheduled", "in_progress", "completed", "cancelled", "draft"
+  jobType        String // "installation", "winterization", "spring_activation", "repair"
+  scheduledStart DateTime
+  scheduledEnd   DateTime
+  actualStart    DateTime?
+  actualEnd      DateTime?
+  notes          String?
+  routeSequence  Int?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  partsUsed      JobPartUsed[]
+  invoices       Invoice[]
+
+  @@map("jobs")
+}
+
+model Part {
+  id          String        @id @default(uuid())
+  orgId       String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  sku         String        @unique
+  name        String
+  description String?
+  category    String? // "sprinkler head", "pipe", "valve", "controller", "nozzle"
+  unitPrice   Float // Customer-facing price
+  costPrice   Float // Internal wholesale price
+  createdAt   DateTime      @default(now())
+  stockLevels StockLevel[]
+  partsUsed   JobPartUsed[]
+
+  @@map("parts")
+}
+
+model Warehouse {
+  id             String       @id @default(uuid())
+  orgId          String
+  organization   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  name           String // e.g., "Main Warehouse", "Truck 1"
+  isMobile       Boolean      @default(false)
+  assignedUserId String?
+  assignedUser   User?        @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+  stockLevels    StockLevel[]
+  partsUsed      JobPartUsed[]
+
+  @@map("warehouses")
+}
+
+model StockLevel {
+  partId              String
+  part                Part      @relation(fields: [partId], references: [id], onDelete: Cascade)
+  warehouseId         String
+  warehouse           Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  quantity            Int       @default(0)
+  minAlertThreshold   Int       @default(5)
+
+  @@id([partId, warehouseId])
+  @@map("stock_levels")
+}
+
+model JobPartUsed {
+  id               String    @id @default(uuid())
+  jobId            String
+  job              Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  partId           String
+  part             Part      @relation(fields: [partId], references: [id], onDelete: Cascade)
+  warehouseId      String
+  warehouse        Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  quantityUsed     Int       @default(1)
+  unitPriceCharged Float // Price locked at use time
+  createdAt        DateTime  @default(now())
+
+  @@map("job_parts_used")
+}
+
+model Quote {
+  id           String       @id @default(uuid())
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  propertyId   String
+  property     Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  status       String       @default("draft") // "draft", "sent", "accepted", "rejected"
+  designData   String? // JSON string representing SVG nodes/coordinate layout
+  totalAmount  Float        @default(0.0)
+  createdAt    DateTime     @default(now())
+  invoices     Invoice[]
+
+  @@map("quotes")
+}
+
+model Invoice {
+  id             String       @id @default(uuid())
+  orgId          String
+  organization   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customerId     String
+  customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  jobId          String?
+  job            Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  quoteId        String?
+  quote          Quote?       @relation(fields: [quoteId], references: [id], onDelete: SetNull)
+  status         String       @default("unpaid") // "unpaid", "paid", "void"
+  totalAmount    Float
+  taxAmount      Float        @default(0.0)
+  dueDate        DateTime
+  stripeInvoiceId String?
+  createdAt      DateTime     @default(now())
+
+  @@map("invoices")
+}
+
+model Design {
+  id           String       @id @default(uuid())
+  orgId        String
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  customerId   String
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  propertyId   String
+  property     Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name         String
+  zones        String       // JSON: [{label, area_sqft, sprinklerType, headCount, pipeLength_ft}]
+  notes        String?
+  status       String       @default("draft") // "draft", "active", "archived"
+  bomData      String?      // JSON: auto-generated BOM
+  quotePdfPath String?      // File path to generated PDF
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@map("designs")
+}
