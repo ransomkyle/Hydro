@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Ruler, MapPin, ChevronRight } from 'lucide-react'
+import { Plus, Ruler } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { AppShell } from '@/components/AppShell'
 import { DataTable } from '@/components/DataTable'
@@ -10,15 +10,9 @@ import { EmptyState } from '@/components/EmptyState'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { useToast } from '@/components/Toast'
 import { api } from '@/lib/api'
-import type { Design, DesignStatus } from '@/types/domain'
+import type { Design } from '@/types/domain'
 import type { Column } from '@/components/DataTable'
 
-const STATUS_LABELS: Record<DesignStatus, string> = {
-  draft: 'Draft',
-  designed: 'Designed',
-  quoted: 'Quoted',
-  approved: 'Approved',
-}
 
 export function DesignerListPage() {
   const { user, loading: authLoading } = useAuth()

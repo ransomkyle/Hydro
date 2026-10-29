@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import {
   LayoutDashboard,
   Calendar,
@@ -49,7 +49,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Ruler,
 }
 
-interface TopNavProps {
+export interface TopNavProps {
   orgName: string
   userName: string
   notificationCount?: number
@@ -60,7 +60,6 @@ interface TopNavProps {
 }
 
 function TopNav({
-  orgName,
   userName,
   notificationCount = 0,
   onNotificationsClick,
@@ -164,7 +163,7 @@ function TopNav({
   )
 }
 
-interface SidebarNavProps {
+export interface SidebarNavProps {
   items: NavItem[]
   currentPath: string
   onNavigate: (path: string) => void
@@ -217,7 +216,7 @@ function SidebarNav({ items, currentPath, onNavigate, collapsed = false }: Sideb
 }
 
 // Bottom tab bar for mobile
-interface MobileTabBarProps {
+export interface MobileTabBarProps {
   items: NavItem[]
   currentPath: string
   onNavigate: (path: string) => void

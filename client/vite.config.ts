@@ -4,6 +4,12 @@ import react from '@vitejs/plugin-react';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      // ESM-safe alias for the '@/*' -> 'src/*' path mapping in tsconfig.json
+      '@': new URL('./src', import.meta.url).pathname,
+    },
+  },
   server: {
     host: '0.0.0.0',
     port: 5173,

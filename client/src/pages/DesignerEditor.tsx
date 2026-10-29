@@ -1,13 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import {
-  Plus, Trash2, Ruler, Save, FileText, Download, ChevronLeft,
-  Droplets, Settings, Zap, Wind, Layers, X, Check,
+  Plus, Trash2, Save, FileText, Download, ChevronLeft,
+  Droplets, Zap, Wind, X, Check,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { AppShell } from '@/components/AppShell'
 import { useToast } from '@/components/Toast'
 import { LoadingSkeleton } from '@/components/LoadingSkeleton'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -541,12 +540,12 @@ export function DesignerEditorPage() {
       {/* Delete zone confirm */}
       <ConfirmDialog
         open={deleteConfirm !== null}
-        onClose={() => setDeleteConfirm(null)}
+        onCancel={() => setDeleteConfirm(null)}
         onConfirm={() => deleteConfirm !== null && deleteZone(deleteConfirm)}
         title="Delete Zone"
         message="Are you sure you want to delete this zone? This cannot be undone."
         confirmLabel="Delete"
-        variant="danger"
+        confirmVariant="danger"
       />
     </div>
   )
