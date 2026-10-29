@@ -1,19 +1,18 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
   Calendar,
   Package,
   FileText,
-  MapPin,
   Layers,
   CheckCircle,
   AlertCircle,
   Database,
   UserCircle,
 } from 'lucide-react';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './components/Toast';
 import { DesignerListPage } from './pages/DesignerList';
 import { DesignerNewPage } from './pages/DesignerNew';
@@ -27,39 +26,7 @@ import PortalAppointments from './pages/PortalAppointments';
 import PortalInvoices from './pages/PortalInvoices';
 import PortalServiceRequest from './pages/PortalServiceRequest';
 
-// ----------- Portal Auth Guard -----------
-function RequirePortalAuth({ children }: { children: React.ReactNode }) {
-  // Dynamically import to avoid circular dependency
-  const { isAuthenticated, isLoading } = (() => {
-    try {
-      const ctx = require('./context/PortalContext');
-      return ctx.usePortal();
-    } catch {
-      return { isAuthenticated: false, isLoading: false };
-    }
-  })();
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-green-500 border-t-transparent rounded-full" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/portal/login" replace />;
-  }
-
-  return <>{children}</>;
-}
-
-// Lazy-load portal guard that uses usePortal safely inside PortalProvider
-function PortalGuard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated: _isauth } = { isAuthenticated: false };
-  // Just render children — auth check happens inside PortalProvider context
-  return <>{children}</>;
-}
 
 // ----------- Portal Routes -----------
 function PortalRoutes() {

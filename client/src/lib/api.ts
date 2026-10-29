@@ -1,9 +1,5 @@
 const API_BASE = '/api'
 
-interface ApiResponse<T> {
-  data?: T
-  error?: string
-}
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${endpoint}`, {

@@ -1,4 +1,4 @@
-import type { JobStatus } from '@/types/domain'
+import type { JobStatus, DesignStatus } from '@/types/domain'
 import {
   Calendar,
   MapPin,
@@ -8,21 +8,27 @@ import {
   XCircle,
   FileText,
   AlertTriangle,
+  PencilRuler,
+  Send,
+  ThumbsUp,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
 export type StatusBadgeSize = 'sm' | 'md' | 'lg'
 
+/** Any status value the badge can render: job lifecycle or AI-designer lifecycle. */
+export type StatusValue = JobStatus | DesignStatus
+
 interface StatusBadgeProps {
-  status: JobStatus
+  status: StatusValue
   size?: StatusBadgeSize
   showIcon?: boolean
   label?: string
   className?: string
 }
 
-const STATUS_CONFIG: Record<JobStatus, { color: string; icon: LucideIcon; label: string }> = {
+const STATUS_CONFIG: Record<StatusValue, { color: string; icon: LucideIcon; label: string }> = {
   scheduled:    { color: 'bg-blue-100 text-blue-800',  icon: Calendar,      label: 'Scheduled' },
   en_route:    { color: 'bg-amber-100 text-amber-800', icon: MapPin,       label: 'En Route' },
   in_progress: { color: 'bg-green-100 text-green-800', icon: Play,         label: 'In Progress' },
@@ -31,6 +37,10 @@ const STATUS_CONFIG: Record<JobStatus, { color: string; icon: LucideIcon; label:
   cancelled:   { color: 'bg-red-100 text-red-800',     icon: XCircle,      label: 'Cancelled' },
   draft:       { color: 'bg-gray-100 text-gray-600',   icon: FileText,     label: 'Draft' },
   emergency:   { color: 'bg-purple-100 text-purple-800', icon: AlertTriangle, label: 'Emergency' },
+  // AI Irrigation Designer lifecycle
+  designed:    { color: 'bg-indigo-100 text-indigo-800', icon: PencilRuler, label: 'Designed' },
+  quoted:      { color: 'bg-amber-100 text-amber-800',  icon: Send,        label: 'Quoted' },
+  approved:    { color: 'bg-emerald-100 text-emerald-800', icon: ThumbsUp, label: 'Approved' },
 }
 
 const SIZE_CLASSES: Record<StatusBadgeSize, string> = {

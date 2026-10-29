@@ -102,7 +102,7 @@ export function DesignerNewPage() {
               </option>
               {properties.map(p => (
                 <option key={p.id} value={p.id}>
-                  {p.address} {p.city ? `— ${p.city}, ${p.state}` : ''}
+                  {p.streetAddress} {p.city ? `— ${p.city}, ${p.state}` : ''}
                 </option>
               ))}
             </select>
@@ -111,9 +111,9 @@ export function DesignerNewPage() {
           {selectedProperty && (
             <div className="bg-surface rounded-lg p-3 text-sm text-text-secondary space-y-1">
               <p><strong>Customer:</strong> {selectedCustomer?.firstName} {selectedCustomer?.lastName}</p>
-              <p><strong>Address:</strong> {selectedProperty.address}</p>
-              {selectedProperty.city && <p><strong>Location:</strong> {selectedProperty.city}, {selectedProperty.state} {selectedProperty.zip}</p>}
-              {selectedProperty.lat && <p className="text-xs text-text-secondary">Lat: {selectedProperty.lat}, Lng: {selectedProperty.lng}</p>}
+              <p><strong>Address:</strong> {selectedProperty.streetAddress}</p>
+              {selectedProperty.city && <p><strong>Location:</strong> {selectedProperty.city}, {selectedProperty.state} {selectedProperty.zipCode}</p>}
+              {selectedProperty.latitude && <p className="text-xs text-text-secondary">Lat: {selectedProperty.latitude}, Lng: {selectedProperty.longitude}</p>}
             </div>
           )}
           <button

@@ -5,14 +5,8 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { KPICard } from '@/components/KPICard'
 import { DataTable } from '@/components/DataTable'
 import { SearchInput } from '@/components/SearchInput'
-import { useToast } from '@/components/Toast'
-import type { Job, Customer } from '@/types/domain'
+import type { Job } from '@/types/domain'
 
-const SAMPLE_CUSTOMERS: Customer[] = [
-  { id: '1', orgId: 'org1', firstName: 'John', lastName: 'Doe', email: 'john@example.com', phone: '(555) 123-4567', createdAt: '2026-01-15', properties: [] },
-  { id: '2', orgId: 'org1', firstName: 'Jane', lastName: 'Smith', email: 'jane@example.com', phone: '(555) 234-5678', createdAt: '2026-02-20', properties: [] },
-  { id: '3', orgId: 'org1', firstName: 'Bob', lastName: 'Wilson', email: 'bob@example.com', phone: '(555) 345-6789', createdAt: '2026-03-10', properties: [] },
-]
 
 const DEMO_JOBS: Job[] = [
   { id: '1', orgId: 'org1', propertyId: 'p1', status: 'in_progress', jobType: 'installation', scheduledStart: '2026-06-15T08:00:00Z', scheduledEnd: '2026-06-15T11:00:00Z', createdAt: '2026-06-10' },
@@ -22,7 +16,6 @@ const DEMO_JOBS: Job[] = [
 ]
 
 export function DashboardPage() {
-  const { addToast } = useToast()
   const [searchQuery, setSearchQuery] = useState('')
 
   return (

@@ -1,6 +1,6 @@
 import { cn } from '@/utils/cn'
 
-type SkeletonVariant = 'text' | 'card' | 'table' | 'avatar' | 'chart'
+export type SkeletonVariant = 'text' | 'card' | 'table' | 'avatar' | 'chart' | 'page'
 
 interface LoadingSkeletonProps {
   variant?: SkeletonVariant
@@ -78,12 +78,33 @@ function ChartSkeleton({ className }: { className?: string }) {
   )
 }
 
+function PageSkeleton({ className }: { className?: string }) {
+  return (
+    <div className={cn('p-4 md:p-6 space-y-6', className)}>
+      {/* Page header */}
+      <div className="space-y-2">
+        <div className="h-7 bg-gray-200 rounded w-56 animate-pulse" />
+        <div className="h-3 bg-gray-200 rounded w-80 animate-pulse" />
+      </div>
+      {/* KPI / stat cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-24 bg-gray-200 rounded-xl animate-pulse" />
+        ))}
+      </div>
+      {/* Main content */}
+      <div className="h-64 bg-gray-200 rounded-xl animate-pulse" />
+    </div>
+  )
+}
+
 const VARIANT_MAP: Record<SkeletonVariant, React.FC<{ className?: string }>> = {
   text: TextSkeleton,
   card: CardSkeleton,
   table: TableSkeleton,
   avatar: AvatarSkeleton,
   chart: ChartSkeleton,
+  page: PageSkeleton,
 }
 
 export function LoadingSkeleton({

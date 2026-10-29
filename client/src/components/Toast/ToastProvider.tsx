@@ -2,9 +2,9 @@ import { createContext, useContext, useState, useCallback, type ReactNode } from
 import { CheckCircle, XCircle, Info, AlertTriangle, X } from 'lucide-react'
 import { cn } from '@/utils/cn'
 
-type ToastType = 'success' | 'error' | 'info' | 'warning'
+export type ToastType = 'success' | 'error' | 'info' | 'warning'
 
-interface Toast {
+export interface Toast {
   id: string
   type: ToastType
   title: string
