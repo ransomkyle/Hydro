@@ -1,4 +1,4 @@
-# Shipping QC
+# DAD Manufacturing — Shipping QC
 
 Shipment quality-release and audit system for a stainless steel fabrication shop. Every shipment — from a 1" part to a 50 ft vessel — gets its own signed-off, time-stamped checklist, a materials/traceability record, a custody timeline (time, place, driver, signature), photos and certs, and a one-click PDF **Quality Release Package** for the customer.
 

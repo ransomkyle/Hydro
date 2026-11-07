@@ -1,4 +1,4 @@
-# Design notes, research, and assumptions
+# DAD Manufacturing Shipping QC — design notes, research, and assumptions
 
 ## What you asked for → where it lives
 | Need | Implementation |

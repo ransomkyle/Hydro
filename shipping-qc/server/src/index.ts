@@ -12,7 +12,7 @@ const app = createApp();
 const { QC_TLS_CERT, QC_TLS_KEY } = process.env;
 if (QC_TLS_CERT && QC_TLS_KEY) {
   https.createServer({ cert: fs.readFileSync(QC_TLS_CERT), key: fs.readFileSync(QC_TLS_KEY) }, app)
-    .listen(PORT, '0.0.0.0', () => console.log(`Shipping QC listening on https://0.0.0.0:${PORT}`));
+    .listen(PORT, '0.0.0.0', () => console.log(`DAD Shipping QC listening on https://0.0.0.0:${PORT}`));
 } else {
-  app.listen(PORT, '0.0.0.0', () => console.log(`Shipping QC listening on http://0.0.0.0:${PORT}  (HTTP: offline mode, camera and GPS only work on localhost — use HTTPS on the shop network)`));
+  app.listen(PORT, '0.0.0.0', () => console.log(`DAD Shipping QC listening on http://0.0.0.0:${PORT}  (HTTP: offline mode, camera and GPS only work on localhost — use HTTPS on the shop network)`));
 }

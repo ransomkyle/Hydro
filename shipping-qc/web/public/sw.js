@@ -1,4 +1,4 @@
-/* Shipping QC service worker: lets the app shell open with no network. API data is cached by the app itself (IndexedDB). */
+/* DAD Shipping QC service worker: lets the app shell open with no network. API data is cached by the app itself (IndexedDB). */
 const CACHE = 'qc-shell-v2';
 
 self.addEventListener('install', (event) => {

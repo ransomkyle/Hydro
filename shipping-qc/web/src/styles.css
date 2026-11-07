@@ -113,4 +113,9 @@ ul.clean { margin: 0; padding-left: 1.1rem; } ul.clean li { margin: .15rem 0; }
   .nav a { padding: .5rem .6rem; } .main { padding: .8rem .7rem 5rem; } .hide-sm { display: none !important; } .brand span { display: none; }
   .tbl th, .tbl td { padding: .5rem .5rem; }
 }
-@media print { .top, .btn, .tabs { display: none !important; } .main { max-width: none; } }
+@media print {
+  .btn, .tabs, .nav, .pill, .bell, .banner, .toasts { display: none !important; }
+  .top { position: static; border-bottom: 3px solid var(--brand-pink); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sec-h, .badge, .progress > i, .item { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .main { max-width: none; padding: .5rem 0; } .item { break-inside: avoid; }
+}

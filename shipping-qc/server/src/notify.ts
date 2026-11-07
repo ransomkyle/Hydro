@@ -11,7 +11,7 @@ export function notifyRoles(n: NotifyInput): void {
   if (NOTIFY_WEBHOOK_URL) {
     fetch(NOTIFY_WEBHOOK_URL, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text: `${n.title}${n.body ? ' — ' + n.body : ''}`, kind: n.kind, shipmentId: n.shipmentId ?? null }),
+      body: JSON.stringify({ text: `[DAD Shipping QC] ${n.title}${n.body ? ' — ' + n.body : ''}`, kind: n.kind, shipmentId: n.shipmentId ?? null }),
       signal: AbortSignal.timeout(5000),
     }).catch(e => console.warn('webhook failed:', e.message));
   }
