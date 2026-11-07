@@ -49,7 +49,7 @@ export default function ShipmentDetail() {
             {can('manager', 'admin') && <button className="btn ghost" onClick={() => setDlg('template')}>Save checklist as template</button>}
           </div>
         </div>
-        <div className="progress" aria-label="checklist progress"><i style={{ width: pct + '%' }} /></div>
+        <div className="progress" role="progressbar" aria-label="Checklist progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><i style={{ width: pct + '%' }} /></div>
         <div className="row small muted"><span>{d.readiness.progress.done}/{d.readiness.progress.total} items signed ({pct}%)</span>
           {s.pickup_appt && <span>· Pickup {fmtShort(s.pickup_appt)}</span>}{s.weight_lb ? <span>· {Number(s.weight_lb).toLocaleString()} lb</span> : null}{s.length_in ? <span>· {(s.length_in / 12).toFixed(1)} ft long</span> : null}
           {s.released_at && <span>· Released {fmtDT(s.released_at)} by {s.released_by_name}</span>}</div>

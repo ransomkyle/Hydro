@@ -40,9 +40,9 @@ export default function AuditReports() {
       </section>
       <section className="card flush">
         <div className="card-h">
-          <input type="text" placeholder="User" style={{ width: 140 }} value={f.user} onChange={e => setF({ ...f, user: e.target.value })} />
-          <input type="text" placeholder="Action (e.g. item.pass)" style={{ width: 190 }} value={f.action} onChange={e => setF({ ...f, action: e.target.value })} />
-          <input type="date" style={{ width: 160 }} value={f.from} onChange={e => setF({ ...f, from: e.target.value })} /><input type="date" style={{ width: 160 }} value={f.to} onChange={e => setF({ ...f, to: e.target.value })} />
+          <input type="text" aria-label="Filter by user" placeholder="User" style={{ width: 140 }} value={f.user} onChange={e => setF({ ...f, user: e.target.value })} />
+          <input type="text" aria-label="Filter by action" placeholder="Action (e.g. item.pass)" style={{ width: 190 }} value={f.action} onChange={e => setF({ ...f, action: e.target.value })} />
+          <input type="date" aria-label="From date" style={{ width: 160 }} value={f.from} onChange={e => setF({ ...f, from: e.target.value })} /><input type="date" aria-label="To date" style={{ width: 160 }} value={f.to} onChange={e => setF({ ...f, to: e.target.value })} />
           <label className="check"><input type="checkbox" checked={f.offline === '1'} onChange={e => setF({ ...f, offline: e.target.checked ? '1' : '' })} />Offline only</label>
           <button className="btn sm primary" onClick={load}>Filter</button>
         </div>

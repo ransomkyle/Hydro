@@ -17,7 +17,7 @@ export default function Gauges() {
     <div className="stack">
       <div className="row"><h1>Gauge calibration register</h1>{mayEdit && <button className="btn primary right" onClick={() => { setErr(null); setEdit({ ...blank, _new: true }); }}>+ Add gauge</button>}</div>
       <div className="note">Measurement items can record the gauge used. A sign-off using an <b>out-of-calibration</b>, out-of-service or unknown gauge is rejected (ISO 9001 §7.1.5). Update the due date here when a gauge is recalibrated.</div>
-      <div className="card flush scroll-x"><table className="tbl"><thead><tr><th>Gauge</th><th>Description</th><th>Plant</th><th>Last cal</th><th>Due</th><th>Status</th>{mayEdit && <th />}</tr></thead>
+      <div className="card flush scroll-x"><table className="tbl"><thead><tr><th>Gauge</th><th>Description</th><th>Plant</th><th>Last cal</th><th>Due</th><th>Status</th>{mayEdit && <th><span className="sr-only">Actions</span></th>}</tr></thead>
         <tbody>{rows.map(g => (
           <tr key={g.id}><td><b>{g.gauge_no}</b></td><td>{g.description}{g.cal_cert && <div className="muted tiny">Cert {g.cal_cert}</div>}</td><td>{g.plant ?? '—'}</td><td>{g.cal_date ?? '—'}</td>
             <td style={g.overdue ? { color: 'var(--bad)', fontWeight: 700 } : undefined}>{g.cal_due}</td>

@@ -7,7 +7,7 @@ export default function Login() {
   const { login, loginMfa, pending } = useAuth(); const [mfa, setMfa] = useState<string | null>(null); const [code, setCode] = useState('');
   const [u, setU] = useState(''); const [p, setP] = useState(''); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   return (
-    <div className="login">
+    <main className="login">
       <div className="card stack">
         <div className="login-brand"><img src="/dad-logo.png" alt="DAD Manufacturing" /><h1 style={{ marginTop: 6 }}>DAD Manufacturing</h1><div className="tag">Diversified · Accurate · Dependable</div><div className="muted" style={{ marginTop: 10 }}>Shipping QC — sign in to release shipments and sign off checks.</div></div>
         <form className="stack" onSubmit={async e => {
@@ -26,6 +26,6 @@ export default function Login() {
         </form>
         {pending > 0 && <div className="note warn">{pending} action(s) recorded offline are saved on this device and will sync after you sign in.</div>}
       </div>
-    </div>
+    </main>
   );
 }

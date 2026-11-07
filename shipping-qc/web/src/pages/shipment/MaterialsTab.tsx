@@ -48,7 +48,7 @@ export default function MaterialsTab(p: TabProps) {
         </form>)}
       <div className="card flush scroll-x">
         <table className="tbl">
-          <thead><tr><th>Type</th><th>Material</th><th>Grade</th><th>Heat / lot</th><th>Qty</th><th>Logged</th><th /></tr></thead>
+          <thead><tr><th>Type</th><th>Material</th><th>Grade</th><th>Heat / lot</th><th>Qty</th><th>Logged</th><th><span className="sr-only">Actions</span></th></tr></thead>
           <tbody>
             {rows.map(m => (
               <tr key={m.id}>

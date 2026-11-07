@@ -32,8 +32,8 @@ export default function Reports() {
     <div className="stack">
       <div className="row"><h1>Quality reports</h1>
         <span className="right row">
-          {meta.plants.length > 1 && <select style={{ width: 'auto' }} value={plant} onChange={e => setPlant(e.target.value)}><option value="">All plants</option>{meta.plants.map(p => <option key={p}>{p}</option>)}</select>}
-          <select style={{ width: 'auto' }} value={range} onChange={e => setRange(e.target.value)}>{RANGES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+          {meta.plants.length > 1 && <select aria-label="Plant" style={{ width: 'auto' }} value={plant} onChange={e => setPlant(e.target.value)}><option value="">All plants</option>{meta.plants.map(p => <option key={p}>{p}</option>)}</select>}
+          <select aria-label="Date range" style={{ width: 'auto' }} value={range} onChange={e => setRange(e.target.value)}>{RANGES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
           <button className="btn sm" onClick={() => window.print()}>Print</button>
         </span></div>
       {err && <div className="err">{err}</div>}

@@ -10,7 +10,7 @@ export default function ForcePassword() {
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const ok = cur && pw.length >= 10 && pw === pw2 && pin.length >= 4 && pin === pin2;
   return (
-    <div className="login">
+    <main className="login">
       <div className="card stack">
         <div className="login-brand"><img src="/dad-logo.png" alt="DAD Manufacturing" /><h1 style={{ marginTop: 6 }}>Welcome, {user!.name.split(' ')[0]}</h1>
           <div className="muted">Before you start, replace your temporary password and choose a sign-off PIN.</div></div>
@@ -30,6 +30,6 @@ export default function ForcePassword() {
         }}>{busy ? 'Saving…' : 'Save and continue'}</button>
         <button className="btn ghost" onClick={logout}>Sign out</button>
       </div>
-    </div>
+    </main>
   );
 }

@@ -18,7 +18,7 @@ export default function Capa() {
     <div className="stack">
       <div className="row"><h1>Corrective & preventive actions</h1>{qc && <button className="btn primary right" onClick={() => setSel({ ...blank, _new: true })}>+ New CAPA</button>}</div>
       <div className="note">A flag records <i>what</i> went wrong. A CAPA records <i>why</i> it happened and what stops it recurring. Open one from any flag (Flags tab) or start one here. A QC manager closes it with PIN once the effectiveness check is done.</div>
-      <div className="row"><select style={{ width: 'auto' }} value={filter} onChange={e => setFilter(e.target.value)}><option value="open">Open</option><option value="all">All</option></select></div>
+      <div className="row"><select aria-label="Show CAPAs" style={{ width: 'auto' }} value={filter} onChange={e => setFilter(e.target.value)}><option value="open">Open</option><option value="all">All</option></select></div>
       <div className="card flush scroll-x"><table className="tbl"><thead><tr><th>CAPA</th><th>Title</th><th>Shipment</th><th>Owner</th><th>Due</th><th>Status</th></tr></thead>
         <tbody>{rows.map(c => (
           <tr key={c.id} className="click" onClick={() => setSel(c)}><td><b>{c.capa_no}</b></td><td>{c.title}</td><td>{c.shipment_no ? <Link to={`/shipments/${c.shipment_id}`} onClick={e => e.stopPropagation()}>{c.shipment_no}</Link> : '—'}</td>
