@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -151,6 +152,39 @@ describe('reports & anchors', () => {
   it('exposes an audit anchor', async () => {
     const a = (await api('GET', '/api/audit/anchor', 'auditor')).body;
     assert.equal(a.chainIntact, true); assert.match(a.lastHash, /^[0-9a-f]{64}$/); assert.ok(a.entries > 20);
+  });
+});
+
+describe('idempotency only counts applied operations', () => {
+  it('a rejected attempt does not poison its op id', async () => {
+    const d = (await api('GET', `/api/shipments/${shipId}`, 'manager')).body;
+    const it = d.items.find((i: any) => i.signer_role === 'inspector' && i.status === 'pending' && i.kind === 'check');
+    const opId = crypto.randomUUID();
+    assert.equal((await api('POST', `/api/shipments/items/${it.id}/sign`, 'operator', { result: 'pass', pin: pins.operator, opId })).status, 403);
+    const ok = await api('POST', `/api/shipments/items/${it.id}/sign`, 'inspector', { result: 'pass', pin: pins.inspector, opId });
+    assert.equal(ok.status, 200); assert.notEqual(ok.body.duplicate, true, 'applied, not treated as a duplicate');
+    assert.equal(ok.body.items.find((i: any) => i.id === it.id).status, 'pass');
+    const again = await api('POST', `/api/shipments/items/${it.id}/sign`, 'inspector', { result: 'pass', pin: pins.inspector, opId });
+    assert.equal(again.body.duplicate, true, 'a true replay is still deduplicated');
+  });
+  it('rejects offline timestamps older than the window', async () => {
+    const d = (await api('GET', `/api/shipments/${shipId}`, 'manager')).body;
+    const it = d.items.find((i: any) => i.signer_role === 'any' && i.status === 'pending' && i.kind === 'check');
+    const u = (await api('POST', '/api/auth/login', null, { username: 'operator', password: 'changeme123' })).body;
+    const key = crypto.pbkdf2Sync(pins.operator, Buffer.from(u.pinSalt, 'hex'), 150000, 32, 'sha256');
+    const old = new Date(Date.now() - 5 * 86_400_000).toISOString(); const opId = crypto.randomUUID();
+    const proof = crypto.createHmac('sha256', key).update([opId, 'sign', it.id, 'pass', '', '', old, ''].join('|')).digest('hex');
+    const r = await api('POST', `/api/shipments/items/${it.id}/sign`, 'operator', { result: 'pass', opId, clientAt: old, offline: true, userId: u.user.id, proof });
+    assert.equal(r.status, 400); assert.match(r.body.error, /older than 3 days/);
+  });
+});
+
+describe('admin resets alert the person affected', () => {
+  it('notifies the user and managers', async () => {
+    const uid = (await api('GET', '/api/users', 'admin')).body.find((x: any) => x.username === 'auditor').id;
+    assert.equal((await api('PATCH', `/api/users/${uid}`, 'admin', { pin: '9999' })).status, 200);
+    assert.ok((await api('GET', '/api/notifications', 'auditor')).body.some((n: any) => /PIN was reset by/.test(n.title)));
+    assert.ok((await api('GET', '/api/notifications', 'manager')).body.some((n: any) => /reset the PIN for/.test(n.title)));
   });
 });
 

@@ -8,7 +8,7 @@ import { audit } from '../audit.js';
 import { authenticate, requireRole } from '../auth.js';
 import { MAX_UPLOAD_MB, UPLOAD_DIR } from '../config.js';
 import { db, nowIso } from '../db.js';
-import { alreadyProcessed, effectiveTime, HttpError, wrap } from '../util.js';
+import { alreadyProcessed, effectiveTime, HttpError, markProcessed, wrap } from '../util.js';
 import { loadDetail } from './shipments.js';
 
 export const router = Router();
@@ -54,6 +54,7 @@ router.post('/shipments/:id/attachments', requireRole('operator', 'inspector', '
   if (!fs.existsSync(dest)) fs.writeFileSync(dest, f.buffer, { mode: 0o640 });
   const filename = path.basename(f.originalname || 'upload').replace(/[^\w.\- ()]/g, '_').slice(0, 120);
   db.transaction(() => {
+    markProcessed(b.opId, req.user!.id);
     const r = db.prepare(`INSERT INTO attachments(shipment_id,item_id,kind,filename,mime,size,sha256,stored_as,caption,uploaded_by,uploaded_at,received_at,offline) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(shipmentId, b.itemId ?? null, b.kind, filename, f.mimetype, f.size, sha, stored, b.caption ?? null, req.user!.id, at, nowIso(), offline ? 1 : 0);
     audit({ actor: { id: req.user!.id, name: req.user!.name }, action: 'attachment.add', entity: 'attachment', entityId: Number(r.lastInsertRowid), shipmentId, eventAt: at, offline,

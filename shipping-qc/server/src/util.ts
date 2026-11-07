@@ -34,11 +34,14 @@ export function effectiveTime(offline: boolean | undefined, clientAt: string | u
   return new Date(t).toISOString();
 }
 
-/** Returns true if this op id was already applied (and registers it otherwise). */
-export function alreadyProcessed(opId: string | undefined, userId: number): boolean {
+/** True if this op id was already applied. Read-only: the id is only recorded (markProcessed) inside the transaction that applies the change, so a rejected attempt never blocks a later valid one. */
+export function alreadyProcessed(opId: string | undefined, _userId?: number): boolean {
   if (!opId) return false;
-  const r = db.prepare('INSERT OR IGNORE INTO processed_ops(op_id,user_id,received_at) VALUES (?,?,?)').run(opId, userId, nowIso());
-  return r.changes === 0;
+  return !!db.prepare('SELECT 1 FROM processed_ops WHERE op_id=?').get(opId);
+}
+/** Record an op id as applied. Call inside the same transaction as the change. */
+export function markProcessed(opId: string | undefined, userId: number): void {
+  if (opId) db.prepare('INSERT OR IGNORE INTO processed_ops(op_id,user_id,received_at) VALUES (?,?,?)').run(opId, userId, nowIso());
 }
 
 export const csvEscape = (v: unknown) => {

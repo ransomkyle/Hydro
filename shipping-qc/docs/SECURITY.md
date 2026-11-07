@@ -12,6 +12,19 @@
 - Headers: Content-Security-Policy (no inline scripts, same-origin only), X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy.
 - Soft-gated overrides (release with open items, departed without release) are recorded and alert QC.
 
+## Review log
+A manual review of authentication, signing, offline replay, uploads, SQL construction and exports found and fixed (with regression tests):
+- an op id was recorded before validation, so a rejected attempt could make a later valid retry look like a duplicate → now recorded only inside the transaction that applies the change;
+- offline back-dating window was 14 days → now 3 days (`MAX_OFFLINE_AGE_DAYS`);
+- email subjects could carry newlines → stripped;
+- admin password/PIN resets were silent → the person and the QC managers are now alerted (and it is audited).
+Checked and fine: all SQL is parameterised (dynamic column names come only from validated, allow-listed keys); uploads are allow-listed, magic-byte checked, stored under a server-generated hash name; auth is by `Authorization` header (no cookies, so no CSRF); React escapes all rendered text; PDFs/CSVs are generated server-side with formula neutralisation.
+
+## Accepted risks (understand these)
+- **Back-dating within the offline window.** A dishonest user with their own PIN can submit a sign-off flagged “offline” with a time up to 3 days earlier. It is always visible: the record shows *offline*, the device time, and the server-receipt time. Reviewers should look at offline entries (Audit → “Offline only”) where the gap is large.
+- **Lock-out can be triggered by someone else** who types wrong passwords/PINs for your username (5 failures → 5 minutes). Annoying, not a breach; stops brute-forcing.
+- **An administrator can take over an account** (reset password + PIN). Every reset is audited and alerts the user and QC managers; keep the number of admins small.
+
 ## Known gaps — decide whether they matter to DAD
 | Gap | Risk | Mitigation / next step |
 |---|---|---|

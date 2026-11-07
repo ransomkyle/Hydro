@@ -8,7 +8,7 @@ const transport = SMTP_URL ? (SMTP_URL === 'json' ? nodemailer.createTransport({
 function email(to: string[], subject: string, text: string) {
   if (!transport || !to.length) return;
   for (const addr of to) {
-    transport.sendMail({ from: SMTP_FROM, to: addr, subject: `[DAD Shipping QC] ${subject}`, text }).then(() => { if (SMTP_URL === 'json') sentEmails.push({ to: addr, subject, text }); })
+    transport.sendMail({ from: SMTP_FROM, to: addr, subject: `[DAD Shipping QC] ${subject.replace(/[\r\n]+/g, ' ').slice(0, 200)}`, text }).then(() => { if (SMTP_URL === 'json') sentEmails.push({ to: addr, subject, text }); })
       .catch(e => console.warn('email failed:', e.message));
   }
 }

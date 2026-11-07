@@ -19,7 +19,7 @@ export const NOTIFY_WEBHOOK_URL = process.env.NOTIFY_WEBHOOK_URL ?? '';
 export const TOKEN_TTL_HOURS = Number(process.env.TOKEN_TTL_HOURS ?? 12);
 export const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB ?? 25);
 /** Offline entries older than this are rejected (device clock sanity). */
-export const MAX_OFFLINE_AGE_DAYS = 14;
+export const MAX_OFFLINE_AGE_DAYS = Number(process.env.MAX_OFFLINE_AGE_DAYS ?? 3);
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 

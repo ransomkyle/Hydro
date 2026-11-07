@@ -6,7 +6,7 @@ import { PLANTS, REQUIRE_APPROVED_TEMPLATES } from '../config.js';
 import { db, nowIso } from '../db.js';
 import { notifyRoles } from '../notify.js';
 import { readiness } from '../readiness.js';
-import { alreadyProcessed, effectiveTime, HttpError, wrap } from '../util.js';
+import { alreadyProcessed, effectiveTime, HttpError, markProcessed, wrap } from '../util.js';
 
 export const router = Router();
 router.use(authenticate);
@@ -311,6 +311,7 @@ router.post('/items/:itemId/sign', noAuditors, wrap((req, res) => {
     if (body.result === 'pass' && g.cal_due < at.slice(0, 10)) throw new HttpError(400, `Gauge ${g.gauge_no} calibration expired on ${g.cal_due} — use an in-calibration gauge`);
   }
   db.transaction(() => {
+    markProcessed(body.opId, user.id);
     db.prepare(`UPDATE checklist_items SET status=?,value=?,note=?,gauge_no=?,done_by=?,done_at=?,done_received_at=?,done_offline=?,verified_by=NULL,verified_at=NULL,verify_note=NULL WHERE id=?`)
       .run(body.result, value ?? null, note ?? null, gaugeNo, user.id, at, now, offline ? 1 : 0, itemId);
     if (ship.status === 'draft') db.prepare(`UPDATE shipments SET status='in_progress', updated_at=? WHERE id=?`).run(now, ship.id);
@@ -346,6 +347,7 @@ router.post('/items/:itemId/verify', noAuditors, wrap((req, res) => {
   if (item.done_by === user.id) throw new HttpError(403, 'Verification must be by a different person than the one who signed');
   const at = effectiveTime(offline || body.offline, body.clientAt);
   db.transaction(() => {
+    markProcessed(body.opId, user.id);
     db.prepare(`UPDATE checklist_items SET verified_by=?, verified_at=?, verified_offline=?, verify_note=? WHERE id=?`).run(user.id, at, offline ? 1 : 0, body.note ?? null, itemId);
     audit({ actor: actorOf(user), action: 'item.verify', entity: 'checklist_item', entityId: itemId, shipmentId: ship.id, eventAt: at, offline,
       detail: { text: item.text, signedBy: item.done_by, note: body.note, method: offline ? 'pin-offline-hmac' : 'pin' } });
@@ -410,6 +412,7 @@ router.post('/:id/materials', noAuditors, wrap((req, res) => {
   if (alreadyProcessed(b.opId, req.user!.id)) return res.json({ duplicate: true, ...loadDetail(id) });
   const at = effectiveTime(b.offline, b.clientAt);
   db.transaction(() => {
+    markProcessed(b.opId, req.user!.id);
     const r = db.prepare(`INSERT INTO materials(shipment_id,category,name,grade,heat_lot,spec,qty,unit,mtr_attachment_id,note,added_by,added_at,received_at,offline) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(id, b.category, b.name, b.grade ?? null, b.heat_lot ?? null, b.spec ?? null, b.qty ?? null, b.unit ?? null, b.mtr_attachment_id ?? null, b.note ?? null, req.user!.id, at, nowIso(), b.offline ? 1 : 0);
     audit({ actor: actorOf(req.user!), action: 'material.add', entity: 'material', entityId: Number(r.lastInsertRowid), shipmentId: id, eventAt: at, offline: !!b.offline,
@@ -446,6 +449,7 @@ router.post('/:id/events', requireRole('shipping', 'inspector', 'manager', 'admi
   const at = effectiveTime(b.offline, b.clientAt);
   const now = nowIso();
   db.transaction(() => {
+    markProcessed(b.opId, req.user!.id);
     const r = db.prepare(`INSERT INTO events(shipment_id,type,at,received_at,location,lat,lng,accuracy_m,person_name,note,signature_png,recorded_by,offline) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(id, b.type, at, now, b.location ?? null, b.lat ?? null, b.lng ?? null, b.accuracy_m ?? null, b.person_name ?? null, b.note ?? null, b.signature_png ?? null, req.user!.id, b.offline ? 1 : 0);
     audit({ actor: actorOf(req.user!), action: `event.${b.type}`, entity: 'event', entityId: Number(r.lastInsertRowid), shipmentId: id, eventAt: at, offline: !!b.offline,

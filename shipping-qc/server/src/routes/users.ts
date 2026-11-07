@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { audit } from '../audit.js';
 import { assertStrongPassword, authenticate, checkPassword, clearFails, hashPassword, pinVerifier, recordFail, requireRole, setPin, signToken, throttle, type User } from '../auth.js';
 import { db, nowIso } from '../db.js';
+import { notifyRoles, notifyUser } from '../notify.js';
 import { HttpError, wrap } from '../util.js';
 
 export const authRouter = Router();
@@ -99,6 +100,10 @@ usersRouter.patch('/:id', requireRole('admin'), wrap((req, res) => {
     if (b.role || b.active === false) db.prepare('UPDATE users SET token_version=token_version+1 WHERE id=?').run(id);
     if (b.pin) setPin(id, b.pin);
     audit({ actor: { id: req.user!.id, name: req.user!.name }, action: 'user.update', entity: 'user', entityId: id, detail: { name: b.name, role: b.role, active: b.active, passwordReset: !!b.password, pinReset: !!b.pin } });
+    if ((b.password || b.pin) && id !== req.user!.id) {
+      notifyUser(id, { kind: 'security', title: `Your ${[b.password && 'password', b.pin && 'PIN'].filter(Boolean).join(' and ')} was reset by ${req.user!.name}`, body: 'If you did not ask for this, tell the QC manager immediately.' });
+      notifyRoles({ kind: 'security', title: `${req.user!.name} reset the ${[b.password && 'password', b.pin && 'PIN'].filter(Boolean).join(' and ')} for ${u.name}`, roles: ['manager'], excludeUserId: req.user!.id });
+    }
   })();
   res.json({ ok: true });
 }));
