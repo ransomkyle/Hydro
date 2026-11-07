@@ -16,7 +16,8 @@
     "typecheck": "npm run typecheck -w server && npm run typecheck -w web",
     "backup": "npm run backup -w server",
     "verify-backup": "npm run verify-backup -w server --",
-    "restore": "npm run restore -w server --"
+    "restore": "npm run restore -w server --",
+    "demo-data": "npm run demo-data -w server --"
   },
   "devDependencies": {
     "concurrently": "^9.0.1"

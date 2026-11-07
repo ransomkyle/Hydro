@@ -12,7 +12,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "backup": "tsx src/backup.ts backup",
     "verify-backup": "tsx src/backup.ts verify",
-    "restore": "tsx src/backup.ts restore"
+    "restore": "tsx src/backup.ts restore",
+    "demo-data": "tsx src/demoData.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

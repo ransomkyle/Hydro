@@ -18,7 +18,17 @@ router.get('/dashboard', wrap((req, res) => {
   const upcoming = db.prepare(`SELECT id,shipment_no,customer,status,pickup_appt FROM shipments WHERE pickup_appt IS NOT NULL AND pickup_appt!='' AND status IN ('draft','in_progress','released') ORDER BY pickup_appt LIMIT 15`).all();
   const recent = db.prepare(`SELECT a.id,a.at,a.user_name,a.action,a.shipment_id,s.shipment_no FROM audit_log a LEFT JOIN shipments s ON s.id=a.shipment_id WHERE a.action NOT LIKE 'auth.%' ORDER BY a.id DESC LIMIT 15`).all();
   const unread = (db.prepare('SELECT COUNT(*) n FROM notifications WHERE user_id=? AND read_at IS NULL').get(req.user!.id) as any).n;
-  res.json({ counts, readyForRelease, openFlags, upcoming, recent, unread });
+  // What needs *me* now
+  const verifyQueue = ['inspector', 'manager'].includes(req.user!.role) ? db.prepare(`SELECT c.id item_id, c.text, c.section, s.id shipment_id, s.shipment_no, s.customer, u.name signed_by, c.done_at
+    FROM checklist_items c JOIN shipments s ON s.id=c.shipment_id JOIN users u ON u.id=c.done_by
+    WHERE c.needs_verification=1 AND c.status='pass' AND c.verified_by IS NULL AND c.done_by != ? AND s.status IN ('draft','in_progress') ORDER BY c.done_at LIMIT 30`).all(req.user!.id) : [];
+  const alerts = {
+    capaOverdue: (db.prepare("SELECT COUNT(*) n FROM capas WHERE status!='closed' AND due_date < date('now')").get() as any).n,
+    gaugesOverdue: (db.prepare("SELECT COUNT(*) n FROM gauges WHERE status='active' AND cal_due < date('now')").get() as any).n,
+    gaugesDueSoon: (db.prepare("SELECT COUNT(*) n FROM gauges WHERE status='active' AND cal_due >= date('now') AND cal_due <= date('now','+30 day')").get() as any).n,
+    templatesUnapproved: req.user!.role === 'manager' ? (db.prepare('SELECT COUNT(*) n FROM templates WHERE active=1 AND approved_at IS NULL').get() as any).n : 0,
+  };
+  res.json({ counts, readyForRelease, openFlags, upcoming, recent, unread, verifyQueue, alerts });
 }));
 
 // ---- notifications

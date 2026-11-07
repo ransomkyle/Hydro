@@ -4,6 +4,16 @@ Shipment quality-release and audit system for a stainless steel fabrication shop
 
 Standalone app inside this repo (own `package.json`, own database). The existing SprinkSoft `client/` and `server/` are untouched.
 
+## Screenshots (demo data)
+| | |
+|---|---|
+| ![Dashboard](docs/screenshots/01-dashboard.png) **Dashboard** — what needs you now | ![Shipments](docs/screenshots/02-shipments.png) **Shipments** — status, progress, flags |
+| ![Checklist](docs/screenshots/03-shipment-checklist.png) **Signed checklist** — who/when on every item | ![Logistics](docs/screenshots/04-logistics.png) **Custody timeline** — time, place, GPS, driver signature |
+| ![Reports](docs/screenshots/05-reports.png) **Quality reports** | ![CAPA](docs/screenshots/06-capa.png) **CAPA** |
+| ![Gauges](docs/screenshots/07-gauges.png) **Gauge calibration register** | ![Package](docs/screenshots/10-release-package-page1.png) **PDF release package** |
+| ![Label hold](docs/screenshots/08-label-hold.png) **Label — HOLD until released** | ![Label released](docs/screenshots/09-label-released.png) **Label — released** |
+| ![Phone](docs/screenshots/11-phone-shipments.png) **On a phone** | |
+
 ## Run it
 
 ```bash
@@ -11,6 +21,8 @@ cd shipping-qc
 npm install
 npm run build
 QC_DEMO=1 npm start        # demo users + starter checklists  ->  http://localhost:4100
+# optional, in a second terminal, to fill a DEMO database with realistic shipments in every state:
+QC_DEMO=1 npm run demo-data
 ```
 
 Without `QC_DEMO=1` it creates a single account **admin / admin1234** — sign in, change the password, set a PIN, add your team (Users page).

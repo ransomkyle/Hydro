@@ -10,9 +10,22 @@ export default function Dashboard() {
   if (err) return <div className="err">{err}</div>;
   if (!d) return <div className="muted">Loading…</div>;
   const n = (s: string) => d.counts.find((c: any) => c.status === s)?.n ?? 0;
+  const al = d.alerts ?? {};
   return (
     <div className="stack">
       <h1>Dashboard</h1>
+      {(al.capaOverdue > 0 || al.gaugesOverdue > 0 || al.gaugesDueSoon > 0 || al.templatesUnapproved > 0) && (
+        <div className="card stack" style={{ borderLeft: '6px solid var(--warn)' }}>
+          {al.gaugesOverdue > 0 && <div><b style={{ color: 'var(--bad)' }}>{al.gaugesOverdue} gauge(s) out of calibration</b> — sign-offs using them are blocked. <Link to="/gauges">Open register</Link></div>}
+          {al.gaugesDueSoon > 0 && <div>{al.gaugesDueSoon} gauge(s) due for calibration within 30 days. <Link to="/gauges">Open register</Link></div>}
+          {al.capaOverdue > 0 && <div><b style={{ color: 'var(--bad)' }}>{al.capaOverdue} CAPA(s) overdue.</b> <Link to="/capa">Review</Link></div>}
+          {al.templatesUnapproved > 0 && <div>{al.templatesUnapproved} checklist template(s) are not approved yet. <Link to="/templates">Review & approve</Link></div>}
+        </div>)}
+      {d.verifyQueue?.length > 0 && (
+        <section className="card flush">
+          <div className="card-h"><h2>Waiting for your verification</h2><span className="muted small">Hold points signed by someone else</span></div>
+          <table className="tbl"><tbody>{d.verifyQueue.map((v: any) => <tr key={v.item_id}><td><Link to={`/shipments/${v.shipment_id}`}><b>{v.shipment_no}</b></Link><div className="muted small">{v.customer}</div></td><td>{v.text}<div className="muted tiny">{v.section}</div></td><td className="small">{v.signed_by}<br />{fmtShort(v.done_at)}</td></tr>)}</tbody></table>
+        </section>)}
       <div className="grid g4">
         {[['in_progress', 'In progress'], ['released', 'Released, awaiting pickup'], ['shipped', 'Shipped'], ['delivered', 'Delivered']].map(([s, l]) => (
           <Link key={s} to={`/shipments?status=${s}`} className="card kpi" style={{ textDecoration: 'none', color: 'inherit' }}><b>{n(s)}</b><span>{l}</span></Link>))}
