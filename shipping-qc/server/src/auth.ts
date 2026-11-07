@@ -7,7 +7,7 @@ import { db } from './db.js';
 import { HttpError } from './util.js';
 
 export type Role = 'operator' | 'inspector' | 'manager' | 'shipping' | 'admin' | 'auditor';
-export interface User { id: number; username: string; name: string; role: Role; active: number; pin_salt: string | null; pin_key: string | null; email: string | null; token_version: number; must_change: number }
+export interface User { id: number; username: string; name: string; role: Role; active: number; pin_salt: string | null; pin_key: string | null; email: string | null; token_version: number; must_change: number; totp_enabled?: number }
 
 export const PBKDF2_ITER = 150_000;
 
@@ -80,7 +80,7 @@ export function signToken(u: User): string {
   return jwt.sign({ sub: u.id, role: u.role, tv: u.token_version }, JWT_SECRET, { expiresIn: `${TOKEN_TTL_HOURS}h` });
 }
 
-const userById = db.prepare('SELECT id,username,name,role,active,pin_salt,pin_key,email,token_version,must_change FROM users WHERE id=?');
+const userById = db.prepare('SELECT id,username,name,role,active,pin_salt,pin_key,email,token_version,must_change,totp_enabled FROM users WHERE id=?');
 export const getUser = (id: number) => userById.get(id) as User | undefined;
 
 declare module 'express-serve-static-core' { interface Request { user?: User } }
@@ -92,7 +92,8 @@ export function authenticate(req: Request, _res: Response, next: NextFunction) {
   const h = req.headers.authorization;
   if (!h?.startsWith('Bearer ')) return next(new HttpError(401, 'Not signed in'));
   try {
-    const p = jwt.verify(h.slice(7), JWT_SECRET) as unknown as { sub: number; tv?: number };
+    const p = jwt.verify(h.slice(7), JWT_SECRET) as unknown as { sub: number; tv?: number; purpose?: string };
+    if (p.purpose) throw new Error('not a session token');
     const u = getUser(p.sub);
     if (!u || !u.active) throw new Error('inactive');
     if ((p.tv ?? 0) !== u.token_version) throw new Error('revoked');   // password changed / account reset: old sessions die
@@ -114,4 +115,11 @@ export function canSignRole(role: Role, signerRole: string): boolean {
   if (signerRole === 'manager') return role === 'manager';
   if (signerRole === 'inspector') return role === 'inspector' || role === 'manager';
   return true;
+}
+
+/** Short-lived token proving the password step passed; only good for POST /auth/login/mfa. */
+export const signMfaToken = (u: User) => jwt.sign({ sub: u.id, purpose: 'mfa', tv: u.token_version }, JWT_SECRET, { expiresIn: '5m' });
+export function readMfaToken(t: string): number {
+  try { const p = jwt.verify(t, JWT_SECRET) as unknown as { sub: number; purpose?: string }; if (p.purpose !== 'mfa') throw new Error('x'); return p.sub; }
+  catch { throw new HttpError(401, 'Sign-in step expired — enter your password again'); }
 }

@@ -44,6 +44,7 @@ export function Account() {
         <ErrorBox error={err} />
         <div><button className="btn primary" disabled={!pw || pin.length < 4 || pin !== pin2} onClick={async () => { setErr(null); try { await post('/auth/pin', { password: pw, pin }); toast('PIN saved', 'ok'); setPw(''); setPin(''); setPin2(''); refreshMe(); } catch (e: any) { setErr(e.message); } }}>Save PIN</button></div>
       </section>
+      <MfaSection />
       <section className="card stack">
         <h2>Email for alerts</h2>
         <div className="muted small">Flags, failed items, overrides, and CAPAs assigned to you are emailed here (if the server has email set up).</div>
@@ -67,5 +68,36 @@ export function Account() {
       </section>
       <div><button className="btn" onClick={logout}>Sign out</button></div>
     </div>
+  );
+}
+
+function MfaSection() {
+  const { user, refreshMe } = useAuth(); const toast = useToast();
+  const [setup, setSetup] = useState<{ secret: string; qr: string } | null>(null); const [code, setCode] = useState(''); const [pw, setPw] = useState(''); const [err, setErr] = useState<string | null>(null);
+  const on = !!user!.mfaEnabled;
+  return (
+    <section className="card stack">
+      <h2>Two-factor sign-in {on ? <Badge kind="released">on</Badge> : <Badge kind="pending">off</Badge>}</h2>
+      <div className="muted small">Adds a 6-digit code from an authenticator app (Microsoft/Google Authenticator, Authy, 1Password…) to your password at sign-in. Recommended for QC managers and administrators. If you lose your phone, an administrator can reset it.</div>
+      {!on && !setup && <div><button className="btn" onClick={async () => { setErr(null); try { setSetup(await post('/auth/mfa/setup')); } catch (e: any) { setErr(e.message); } }}>Set up two-factor sign-in…</button></div>}
+      {setup && (
+        <div className="stack">
+          <div className="row" style={{ alignItems: 'flex-start' }}>
+            <img src={setup.qr} alt="QR code to scan with your authenticator app" width={200} height={200} style={{ background: '#fff', border: '1px solid var(--line)', borderRadius: 8 }} />
+            <div className="stack grow"><div>1. Scan this code with your authenticator app.<div className="muted small">Can’t scan? Enter this key manually: <span className="mono" style={{ wordBreak: 'break-all' }}>{setup.secret}</span></div></div>
+              <div>2. Type the 6-digit code it shows:</div>
+              <input className="pinbox" style={{ maxWidth: 220 }} type="text" inputMode="numeric" maxLength={7} value={code} onChange={e => setCode(e.target.value.replace(/[^\d ]/g, ''))} /></div>
+          </div>
+          <ErrorBox error={err} />
+          <div className="row"><button className="btn primary" disabled={code.replace(/\s/g, '').length < 6} onClick={async () => { setErr(null); try { await post('/auth/mfa/enable', { code }); toast('Two-factor sign-in is on', 'ok'); setSetup(null); setCode(''); refreshMe(); } catch (e: any) { setErr(e.message); } }}>Turn on</button>
+            <button className="btn ghost" onClick={() => { setSetup(null); setCode(''); }}>Cancel</button></div>
+        </div>)}
+      {on && (
+        <div className="stack"><div className="grid g2"><label className="f">Password<input type="password" value={pw} onChange={e => setPw(e.target.value)} /></label>
+          <label className="f">Current authenticator code<input type="text" inputMode="numeric" maxLength={7} value={code} onChange={e => setCode(e.target.value.replace(/[^\d ]/g, ''))} /></label></div>
+          <ErrorBox error={err} />
+          <div><button className="btn" disabled={!pw || code.replace(/\s/g, '').length < 6} onClick={async () => { setErr(null); try { await post('/auth/mfa/disable', { password: pw, code }); toast('Two-factor sign-in turned off', 'ok'); setPw(''); setCode(''); refreshMe(); } catch (e: any) { setErr(e.message); } }}>Turn off</button></div></div>)}
+      {!on && !setup && <ErrorBox error={err} />}
+    </section>
   );
 }

@@ -5,7 +5,12 @@ import { authenticate, requireRole } from '../auth.js';
 import { db, nowIso } from '../db.js';
 import { readiness } from '../readiness.js';
 import { HttpError, toCsv, wrap } from '../util.js';
-import { buildLabel, buildPackage } from '../pdf.js';
+import crypto from 'node:crypto';
+import { z as zod } from 'zod';
+import { buildLabel, buildPackage, buildPackageBuffer } from '../pdf.js';
+import { emailConfigured, sendWithAttachment } from '../notify.js';
+import { getUser } from '../auth.js';
+import { BRAND } from '../brand.js';
 
 export const router = Router();
 router.use(authenticate);
@@ -137,4 +142,21 @@ router.get('/audit/anchor', auditViewers, wrap((_req, res) => {
   const last = db.prepare('SELECT id,hash,at FROM audit_log ORDER BY id DESC LIMIT 1').get() as any;
   const v = verifyChain();
   res.json({ entries: v.count, chainIntact: v.ok, lastId: last?.id ?? 0, lastHash: last?.hash ?? null, lastAt: last?.at ?? null, generatedAt: new Date().toISOString() });
+}));
+
+/** Email the signed release package to a customer contact. Only after release; audited with the SHA-256 of exactly what was sent. */
+router.post('/shipments/:id/email-package', requireRole('manager', 'shipping', 'inspector'), wrap(async (req, res) => {
+  const id = Number(req.params.id);
+  const b = zod.object({ to: zod.array(zod.string().email().max(200)).min(1).max(5), message: zod.string().max(2000).optional() }).parse(req.body);
+  if (!emailConfigured()) throw new HttpError(400, 'Email is not set up on this server (an administrator must configure SMTP_URL)');
+  const s = db.prepare('SELECT shipment_no, customer, job_no, po_no, released_at, status FROM shipments WHERE id=?').get(id) as any;
+  if (!s) throw new HttpError(404, 'Shipment not found');
+  if (!s.released_at || s.status === 'cancelled') throw new HttpError(409, 'Only a QC-released shipment’s package can be emailed to a customer');
+  const pdf = await buildPackageBuffer(id);
+  const sha = crypto.createHash('sha256').update(pdf).digest('hex');
+  const me = getUser(req.user!.id);
+  const text = `${b.message ? b.message + '\n\n' : ''}Attached is the quality release package for ${s.customer}, job ${s.job_no}${s.po_no ? ', PO ' + s.po_no : ''} (shipment ${s.shipment_no}).\n\n${BRAND.name}\n${BRAND.address}\n${BRAND.phone} · ${BRAND.web}`;
+  await sendWithAttachment(b.to, `Quality release package — ${s.shipment_no} (${s.customer})`, text, { filename: `${s.shipment_no}-quality-release.pdf`, content: pdf, contentType: 'application/pdf' }, me?.email ?? undefined);
+  audit({ actor: { id: req.user!.id, name: req.user!.name }, action: 'export.package_emailed', entity: 'shipment', entityId: id, shipmentId: id, detail: { to: b.to, sha256: sha, bytes: pdf.length } });
+  res.json({ ok: true, sha256: sha, to: b.to });
 }));

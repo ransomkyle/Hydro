@@ -2,6 +2,7 @@
 
 ## What is in place
 - **Individual accounts + PIN re-entry** for every sign-off; roles limit who can sign, verify, release, approve, edit.
+- **Optional two-factor sign-in** (authenticator app, RFC 6238 TOTP): password then a 6-digit code; each code works once; lost phone → admin reset (audited, user alerted). Recommended for QC managers and administrators.
 - Passwords hashed (bcrypt); PINs stored as a salted PBKDF2-SHA256 (150k) derived key; password policy (10+, not common, not containing the username).
 - **Lockout** after 5 failures (5 minutes) for logins and PIN checks, stored in the database so a restart does not reset it.
 - **Session revocation**: changing or resetting a password, deactivating, or changing a role invalidates existing sessions. New/reset accounts must change their temporary password and set a PIN before using anything else.
@@ -28,7 +29,7 @@ Checked and fine: all SQL is parameterised (dynamic column names come only from 
 ## Known gaps — decide whether they matter to DAD
 | Gap | Risk | Mitigation / next step |
 |---|---|---|
-| No multi-factor sign-in (password + PIN only) | Stolen password+PIN | Keep the server off the internet (VPN only); add TOTP if exposed |
+| Two-factor sign-in is optional, not enforced | Accounts without it rely on password + PIN | Have managers/admins turn it on (My account); keep the server off the internet (VPN only) |
 | Session token kept in browser storage | XSS would expose it | CSP blocks inline/third-party script; tokens expire in 12 h |
 | Uploads/DB not encrypted at rest | Stolen disk | Use OS disk encryption (BitLocker/LUKS) on the server |
 | Single server, single SQLite file | Outage on hardware failure | Nightly off-box backups; restore tested |

@@ -222,6 +222,15 @@ function table(doc: PDFKit.PDFDocument, W: number, cols: [string, number][], row
   rows.forEach(r => draw(r, false));
 }
 
+/** Whole package as a Buffer (for emailing / hashing). */
+export async function buildPackageBuffer(shipmentId: number): Promise<Buffer> {
+  const { PassThrough } = await import('node:stream');
+  const sink = new PassThrough(); const chunks: Buffer[] = [];
+  sink.on('data', c => chunks.push(c));
+  await buildPackage(shipmentId, sink);
+  return Buffer.concat(chunks);
+}
+
 /** 4x6 in shipping label: shipment number, QR (scannable in the app), destination, and an unmissable QC release status. */
 export async function buildLabel(shipmentId: number, out: Writable): Promise<void> {
   const d = loadDetail(shipmentId); const s = d.shipment as any;

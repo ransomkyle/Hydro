@@ -21,12 +21,14 @@
 
 ## QC Manager
 - Review → **Release for shipment…** (PIN). If items are open the screen lists them; releasing anyway needs a typed reason and alerts QC.
+- Turn on **two-factor sign-in** in My account (authenticator app).
 - **Checklists**: approve templates (PIN). Editing a template clears approval.
 - **Reports** weekly; **CAPA** for overdue actions; **Gauges** for calibration due dates; **Audit → Verify chain** + record the **anchor** weekly.
 - Reopen/cancel a shipment only with a reason; both are permanent in the audit trail.
 
 ## Shipping / Logistics
 - Create shipments (or **Import CSV** from the ERP export). Fill carrier/driver/BOL/seal/permits on the **Logistics** tab.
+- After QC releases a shipment you can **✉ Email package…** to the customer contact (if email is set up).
 - Print the **🏷 Label (QR)** — it says **HOLD — NOT RELEASED** until QC releases. Don’t load a HOLD label.
 - Record **Ready / Loaded / Picked up / Delivered** events. For pickup get the driver’s name and signature on the screen and tap **Capture GPS**.
 - Oversize? The tie-down guide on the Logistics tab shows the minimum count for the load length.

@@ -5,6 +5,7 @@ import { ApiError, download, post } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { fmtDT, fmtShort } from '../lib/format';
 import { useShipment } from '../lib/useShipment';
+import { useMeta } from '../lib/useMeta';
 import ChecklistTab from './shipment/ChecklistTab';
 import DocsTab from './shipment/DocsTab';
 import FlagsTab from './shipment/FlagsTab';
@@ -19,9 +20,9 @@ const LOCKED = ['released', 'shipped', 'delivered', 'cancelled'];
 export default function ShipmentDetail() {
   const id = Number(useParams().id);
   const [sp, setSp] = useSearchParams(); const tab = sp.get('tab') ?? 'checklist';
-  const { user, pinSalt, pinVerifier, online, can } = useAuth(); const toast = useToast();
+  const { user, pinSalt, pinVerifier, online, can } = useAuth(); const toast = useToast(); const meta = useMeta();
   const { detail: d, reload, stale, error, setDetail, ops, pendingFiles } = useShipment(id);
-  const [dlg, setDlg] = useState<'release' | 'reopen' | 'cancel' | 'template' | null>(null);
+  const [dlg, setDlg] = useState<'release' | 'reopen' | 'cancel' | 'template' | 'email' | null>(null);
   if (error && !d) return <div className="err">{error}</div>;
   if (!d) return <div className="muted">Loading…</div>;
   const s = d.shipment; const locked = LOCKED.includes(s.status);
@@ -40,6 +41,7 @@ export default function ShipmentDetail() {
             {s.description && <div className="muted">{s.description}</div>}</div>
           <div className="row">
             <button className="btn" disabled={!online} onClick={() => download(`/shipments/${id}/package.pdf`, undefined, true).catch(e => toast(e.message, 'bad'))}>📄 Release package (PDF)</button>
+            {s.released_at && meta.emailConfigured && can('manager', 'shipping', 'inspector') && <button className="btn" disabled={!online} onClick={() => setDlg('email')}>✉ Email package…</button>}
             <button className="btn" disabled={!online} onClick={() => download(`/shipments/${id}/label.pdf`, undefined, true).catch(e => toast(e.message, 'bad'))}>🏷 Label (QR)</button>
             {can('manager') && !locked && <button className="btn ok" onClick={() => setDlg('release')}>Release for shipment…</button>}
             {can('manager') && (s.status === 'released' || s.status === 'shipped') && <button className="btn" onClick={() => setDlg('reopen')}>Reopen…</button>}
@@ -70,6 +72,7 @@ export default function ShipmentDetail() {
       {tab === 'history' && <HistoryTab id={id} />}
       {dlg === 'release' && <ReleaseDialog d={d} onClose={() => setDlg(null)} onDone={x => { setDetail(x); toast('Shipment released ✔', 'ok'); setDlg(null); }} />}
       {(dlg === 'reopen' || dlg === 'cancel') && <ReasonPinDialog kind={dlg} id={id} onClose={() => setDlg(null)} onDone={x => { setDetail(x); setDlg(null); }} />}
+      {dlg === 'email' && <EmailDialog id={id} customer={s.customer} onClose={() => setDlg(null)} toast={toast} />}
       {dlg === 'template' && <TemplateDialog id={id} onClose={() => setDlg(null)} toast={toast} defaultCustomer={s.customer} />}
     </div>
   );
@@ -117,6 +120,23 @@ function TemplateDialog({ id, onClose, toast, defaultCustomer }: { id: number; o
       <label className="f">Customer (leave blank for general use)<input type="text" value={customer} onChange={e => setCustomer(e.target.value)} /></label>
       <ErrorBox error={err} />
       <button className="btn primary" disabled={name.trim().length < 2} onClick={async () => { try { await post(`/shipments/${id}/save-as-template`, { name, customer: customer || null }); toast('Template saved', 'ok'); onClose(); } catch (e: any) { setErr(e.message); } }}>Save template</button>
+    </Modal>
+  );
+}
+
+function EmailDialog({ id, customer, onClose, toast }: { id: number; customer: string; onClose: () => void; toast: any }) {
+  const [to, setTo] = useState(''); const [msg, setMsg] = useState(''); const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const addrs = to.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean);
+  return (
+    <Modal title="Email the quality release package" onClose={onClose}>
+      <div className="muted small">Sends the current PDF package for {customer} (up to 5 addresses). The send, recipients and a fingerprint of the exact file are recorded in the audit trail. A copy goes to you if you have an email on your account.</div>
+      <label className="f">To (comma-separated) *<input type="text" inputMode="email" autoCapitalize="none" value={to} onChange={e => setTo(e.target.value)} placeholder="buyer@customer.com, quality@customer.com" /></label>
+      <label className="f">Message (optional)<textarea value={msg} onChange={e => setMsg(e.target.value)} /></label>
+      <ErrorBox error={err} />
+      <button className="btn primary big" disabled={busy || addrs.length === 0} onClick={async () => {
+        setBusy(true); setErr(null);
+        try { await post(`/shipments/${id}/email-package`, { to: addrs, message: msg || undefined }); toast(`Sent to ${addrs.join(', ')}`, 'ok'); onClose(); } catch (e: any) { setErr(e.message); setBusy(false); }
+      }}>{busy ? 'Sending…' : `Send to ${addrs.length || ''} recipient${addrs.length === 1 ? '' : 's'}`}</button>
     </Modal>
   );
 }

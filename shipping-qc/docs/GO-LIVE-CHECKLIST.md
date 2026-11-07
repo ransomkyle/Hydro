@@ -20,6 +20,7 @@ Work top to bottom. Nothing here is optional except where marked. Owner suggesti
 - [ ] Demo accounts removed (never start with `QC_DEMO=1` in production). Default `admin` password changed on first sign-in.
 - [ ] One account per person, correct role. Everyone has an email if alerts by email are wanted.
 - [ ] Everyone has set their own PIN (the app forces this at first sign-in).
+- [ ] QC managers and admins have turned on **two-factor sign-in** (My account → Two-factor sign-in).
 - [ ] At least **two** QC managers exist (template approval needs a second person; a sole manager may self-approve).
 
 ## 4. Content [QC manager — this is the most important section]

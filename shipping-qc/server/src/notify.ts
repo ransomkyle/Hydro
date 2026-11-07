@@ -3,7 +3,7 @@ import { APP_URL, NOTIFY_WEBHOOK_URL, SMTP_FROM, SMTP_URL } from './config.js';
 import { db, nowIso } from './db.js';
 
 /** Email is optional: set SMTP_URL (smtps://user:pass@host). SMTP_URL=json captures messages in `sentEmails` (used by tests). */
-export const sentEmails: { to: string; subject: string; text: string }[] = [];
+export const sentEmails: { to: string; subject: string; text: string; attachment?: string; size?: number }[] = [];
 const transport = SMTP_URL ? (SMTP_URL === 'json' ? nodemailer.createTransport({ jsonTransport: true }) : nodemailer.createTransport(SMTP_URL)) : null;
 function email(to: string[], subject: string, text: string) {
   if (!transport || !to.length) return;
@@ -11,6 +11,14 @@ function email(to: string[], subject: string, text: string) {
     transport.sendMail({ from: SMTP_FROM, to: addr, subject: `[DAD Shipping QC] ${subject.replace(/[\r\n]+/g, ' ').slice(0, 200)}`, text }).then(() => { if (SMTP_URL === 'json') sentEmails.push({ to: addr, subject, text }); })
       .catch(e => console.warn('email failed:', e.message));
   }
+}
+export const emailConfigured = () => !!transport;
+/** Send one email with a file attached (used to send the quality release package). Resolves when accepted by the SMTP server. */
+export async function sendWithAttachment(to: string[], subject: string, text: string, attachment: { filename: string; content: Buffer; contentType: string }, cc?: string): Promise<void> {
+  if (!transport) throw new Error('Email is not configured on this server (set SMTP_URL)');
+  const info = await transport.sendMail({ from: SMTP_FROM, to, cc, subject: subject.replace(/[\r\n]+/g, ' ').slice(0, 200), text, attachments: [attachment] });
+  if (SMTP_URL === 'json') sentEmails.push({ to: to.join(','), subject, text, attachment: attachment.filename, size: attachment.content.length } as any);
+  void info;
 }
 const link = (shipmentId?: number | null) => (APP_URL && shipmentId ? `\n\n${APP_URL.replace(/\/$/, '')}/shipments/${shipmentId}` : '');
 

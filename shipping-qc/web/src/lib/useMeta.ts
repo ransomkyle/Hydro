@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { get } from './api';
 
-export interface Meta { plants: string[]; requireApprovedTemplates: boolean; onTimeGraceMin: number }
+export interface Meta { plants: string[]; requireApprovedTemplates: boolean; onTimeGraceMin: number; emailConfigured?: boolean }
 /** Shop settings (plants etc.), cached for offline. */
 export function useMeta(): Meta {
   const [m, setM] = useState<Meta>({ plants: [], requireApprovedTemplates: false, onTimeGraceMin: 60 });

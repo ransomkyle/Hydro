@@ -76,7 +76,10 @@ Develop: `npm run dev` (API on :4100, UI on :5174). Tests: `npm test` (35 integr
 - **Reports**: first-pass release %, on-time pickup %, median time to release, item failure rate, flags by checklist section, escapes (left dock without release), overrides, open/overdue CAPAs and gauges.
 - **CSV import** of jobs from any ERP/Excel export (flexible column names, parts grouped per job, duplicate detection, row-level errors, preview before import).
 - **Labels**: 4×6 shipping label with QR and a big **QC RELEASED / HOLD — NOT RELEASED** status. **Scan** QR/barcodes with the phone camera (Chrome/Android) or any USB/Bluetooth scanner.
-- **Email alerts** (optional) alongside in-app and webhook alerts.
+- **Email alerts** (optional) alongside in-app and webhook alerts, and **email the signed release package to a customer** (after release; audited with a SHA-256 of what was sent).
+- **Optional two-factor sign-in** with any authenticator app.
+- **Dashboard** shows what needs *you* (hold points waiting for your verification) plus overdue CAPAs, out-of-calibration gauges and unapproved templates.
+- **`npm run demo-data`** fills a demo database with realistic shipments in every state.
 - **Backups**: `npm run backup`, `npm run verify-backup -- <dir>`, `npm run restore -- <dir> --yes`, plus a weekly **audit anchor** — see `docs/RETENTION-AND-BACKUP.md`.
 - **Security**: lockouts that survive restarts, session revocation on password change, forced first-login password change + PIN, password policy, Content-Security-Policy — see `docs/SECURITY.md`.
 

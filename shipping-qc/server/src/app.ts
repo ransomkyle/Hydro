@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
 import { ON_TIME_GRACE_MIN, PLANTS, REQUIRE_APPROVED_TEMPLATES, WEB_DIST } from './config.js';
+import { emailConfigured } from './notify.js';
 import { authenticate } from './auth.js';
 import { authRouter, usersRouter } from './routes/users.js';
 import { router as attachments } from './routes/attachments.js';
@@ -30,7 +31,7 @@ export function createApp() {
   app.get('/api/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
   app.use('/api/auth', authRouter);
   app.use('/api/users', usersRouter);
-  app.get('/api/meta', authenticate, (_req, res) => res.json({ plants: PLANTS, requireApprovedTemplates: REQUIRE_APPROVED_TEMPLATES, onTimeGraceMin: ON_TIME_GRACE_MIN }));
+  app.get('/api/meta', authenticate, (_req, res) => res.json({ plants: PLANTS, requireApprovedTemplates: REQUIRE_APPROVED_TEMPLATES, onTimeGraceMin: ON_TIME_GRACE_MIN, emailConfigured: emailConfigured() }));
   app.use('/api/gauges', gauges);
   app.use('/api/capas', capas);
   app.use('/api', imports);

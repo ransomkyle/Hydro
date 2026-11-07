@@ -188,6 +188,66 @@ describe('admin resets alert the person affected', () => {
   });
 });
 
+describe('emailing the release package', () => {
+  it('only after release, to valid addresses, audited with a hash of what was sent', async () => {
+    const { sentEmails } = await import('../src/notify.js');
+    const mk = await api('POST', '/api/shipments', 'shipping', { job_no: 'J-MAIL', customer: 'Mailco', templateIds: [baseTpl] });
+    const id = mk.body.shipment.id;
+    assert.equal((await api('POST', `/api/shipments/${id}/email-package`, 'manager', { to: ['buyer@mailco.test'] })).status, 409, 'not released yet');
+    await api('POST', `/api/shipments/${id}/release`, 'manager', { pin: pins.manager, overrideReason: 'test release for email' });
+    assert.equal((await api('POST', `/api/shipments/${id}/email-package`, 'manager', { to: ['not-an-email'] })).status, 400);
+    assert.equal((await api('POST', `/api/shipments/${id}/email-package`, 'operator', { to: ['buyer@mailco.test'] })).status, 403);
+    const r = await api('POST', `/api/shipments/${id}/email-package`, 'manager', { to: ['buyer@mailco.test'], message: 'Thanks for your order.' });
+    assert.equal(r.status, 200); assert.match(r.body.sha256, /^[0-9a-f]{64}$/);
+    const sent = sentEmails.find(m => m.to === 'buyer@mailco.test');
+    assert.ok(sent && sent.attachment?.endsWith('-quality-release.pdf') && (sent.size ?? 0) > 5000);
+    const log = (await api('GET', `/api/shipments/${id}/audit`, 'manager')).body;
+    assert.ok(log.some((a: any) => a.action === 'export.package_emailed' && a.detail.includes(r.body.sha256)));
+  });
+});
+
+describe('two-factor sign-in (TOTP)', () => {
+  it('matches the RFC 6238 test vector and base32 round-trips', async () => {
+    const { hotp, b32decode, b32encode, verifyTotp } = await import('../src/totp.js');
+    const key = Buffer.from('12345678901234567890');
+    assert.equal(hotp(key, Math.floor(59 / 30)), '287082');            // RFC 6238 Appendix B, T=59s (SHA-1) -> 94287082, last 6 digits
+    assert.equal(hotp(key, Math.floor(1111111109 / 30)), '081804');    // T=1111111109 -> 07081804
+    assert.deepEqual(b32decode(b32encode(Buffer.from('hello world!'))), Buffer.from('hello world!'));
+    const secret = b32encode(key);
+    assert.equal(verifyTotp(secret, '287082', 0, 59_000), 1);
+    assert.equal(verifyTotp(secret, '287082', 1, 59_000), null, 'a used step cannot be replayed');
+    assert.equal(verifyTotp(secret, '287082', 0, 59_000 + 120_000), null, 'outside the drift window');
+  });
+  it('enrolls, requires the code at sign-in, rejects replays/wrong codes, and can be reset by an admin', async () => {
+    const { hotp, b32decode, stepNow } = await import('../src/totp.js');
+    const setup = await api('POST', '/api/auth/mfa/setup', 'auditor');
+    assert.equal(setup.status, 200); assert.match(setup.body.qr, /^data:image\/png;base64,/); assert.match(setup.body.otpauth, /^otpauth:\/\/totp\//);
+    const secret = b32decode(setup.body.secret);
+    assert.equal((await api('POST', '/api/auth/mfa/enable', 'auditor', { code: '000000' })).status, 400);
+    const step = stepNow();
+    assert.equal((await api('POST', '/api/auth/mfa/enable', 'auditor', { code: hotp(secret, step) })).status, 200);
+    // login now needs the second step; the password alone yields no session token
+    const l1 = await api('POST', '/api/auth/login', null, { username: 'auditor', password: 'changeme123' });
+    assert.equal(l1.body.mfaRequired, true); assert.ok(!l1.body.token);
+    assert.equal((await api('GET', '/api/auth/me', null, undefined, false, l1.body.mfaToken)).status, 401, 'the mfa token is not a session token');
+    assert.equal((await api('POST', '/api/auth/login/mfa', null, { mfaToken: l1.body.mfaToken, code: '123456' })).status, 401);
+    // the code used to enroll is already burned; the next step's code works once
+    assert.equal((await api('POST', '/api/auth/login/mfa', null, { mfaToken: l1.body.mfaToken, code: hotp(secret, step) })).status, 401, 'enrollment code cannot be reused');
+    const next = hotp(secret, step + 1);
+    const ok = await api('POST', '/api/auth/login/mfa', null, { mfaToken: l1.body.mfaToken, code: next });
+    assert.equal(ok.status, 200); assert.equal(ok.body.user.mfaEnabled, true);
+    assert.equal((await api('GET', '/api/auth/me', null, undefined, false, ok.body.token)).status, 200);
+    const l2 = await api('POST', '/api/auth/login', null, { username: 'auditor', password: 'changeme123' });
+    assert.equal((await api('POST', '/api/auth/login/mfa', null, { mfaToken: l2.body.mfaToken, code: next })).status, 401, 'same code twice is refused');
+    // admin reset (lost phone) turns it off and alerts the user
+    const uid = (await api('GET', '/api/users', 'admin')).body.find((x: any) => x.username === 'auditor').id;
+    assert.equal((await api('PATCH', `/api/users/${uid}`, 'admin', { resetMfa: true })).status, 200);
+    const l3 = await api('POST', '/api/auth/login', null, { username: 'auditor', password: 'changeme123' });
+    assert.ok(l3.body.token, 'password alone works again after reset');
+    assert.ok((await api('GET', '/api/notifications', null, undefined, false, l3.body.token)).body.some((n: any) => /two-factor sign-in was reset/.test(n.title)));
+  });
+});
+
 describe('label', () => {
   it('prints a PDF label with a hold status until released', async () => {
     const r = await api('GET', `/api/shipments/${shipId}/label.pdf`, 'shipping', undefined, true) as Response;
