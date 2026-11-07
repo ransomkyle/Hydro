@@ -1,0 +1,10 @@
+{
+  "name": "Shipping QC",
+  "short_name": "Shipping QC",
+  "description": "Shipment quality release and audit",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#14212e",
+  "theme_color": "#14212e",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
