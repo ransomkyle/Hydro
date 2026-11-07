@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Writable } from 'node:stream';
 import PDFDocument from 'pdfkit';
+import QRCode from 'qrcode';
 import { BRAND, FONT_FILES, hasBrandAssets } from './brand.js';
 import { SHOP_TZ, UPLOAD_DIR } from './config.js';
 import { verifyChain } from './audit.js';
@@ -78,7 +79,7 @@ export function buildPackage(shipmentId: number, out: Writable): Promise<void> {
   doc.font(F.body).fontSize(8).fillColor(mute).text(`Generated ${fmt(new Date().toISOString())} — all times ${SHOP_TZ}`);
 
   h2('Shipment');
-  kv([['Customer PO', s.po_no], ['Size class', s.size_class], ['Description', s.description], ['Special requirements', s.special_requirements],
+  kv([['Plant', s.plant], ['Customer PO', s.po_no], ['Size class', s.size_class], ['Description', s.description], ['Special requirements', s.special_requirements],
     ['Pieces', s.pieces], ['Weight', s.weight_lb != null ? `${s.weight_lb} lb` : null], ['Length', inches(s.length_in)], ['Width × Height', `${dash(s.width_in)} × ${dash(s.height_in)} in`],
     ['Ship from', s.ship_from_dock], ['Ship to', [s.ship_to_name, s.ship_to_address].filter(Boolean).join(', ')], ['Pickup appointment', fmt(s.pickup_appt)], ['Created', `${fmt(s.created_at)} by ${dash(s.created_by_name)}`]]);
 
@@ -107,6 +108,7 @@ export function buildPackage(shipmentId: number, out: Writable): Promise<void> {
     const meta: string[] = [];
     if (i.spec) meta.push(`Spec: ${i.spec}`);
     if (i.value) meta.push(`Value: ${i.value}${i.unit ? ' ' + i.unit : ''}`);
+    if (i.gauge_no) meta.push(`Gauge: ${i.gauge_no}`);
     if (i.note) meta.push(`Note: ${i.note}`);
     if (i.done_by_name) meta.push(`Signed: ${i.done_by_name} — ${fmt(i.done_at)}${i.done_offline ? ' (recorded offline, synced ' + fmt(i.done_received_at) + ')' : ''}`);
     if (i.verified_by_name) meta.push(`Verified: ${i.verified_by_name} — ${fmt(i.verified_at)}${i.verified_offline ? ' (offline)' : ''}${i.verify_note ? ' — ' + i.verify_note : ''}`);
@@ -218,4 +220,35 @@ function table(doc: PDFKit.PDFDocument, W: number, cols: [string, number][], row
   };
   draw(cols.map(c => c[0].toUpperCase()), true);
   rows.forEach(r => draw(r, false));
+}
+
+/** 4x6 in shipping label: shipment number, QR (scannable in the app), destination, and an unmissable QC release status. */
+export async function buildLabel(shipmentId: number, out: Writable): Promise<void> {
+  const d = loadDetail(shipmentId); const s = d.shipment as any;
+  const branded = hasBrandAssets();
+  const doc = new PDFDocument({ size: [288, 432], margin: 14, info: { Title: `Label ${s.shipment_no}`, Author: BRAND.name } });
+  if (branded) { doc.registerFont('Body', FONT_FILES.body); doc.registerFont('Bold', FONT_FILES.bold); doc.registerFont('HeadBold', FONT_FILES.headBold); }
+  const body = branded ? 'Body' : 'Helvetica', bold = branded ? 'Bold' : 'Helvetica-Bold', head = branded ? 'HeadBold' : 'Helvetica-Bold';
+  const rawText = doc.text.bind(doc) as any; (doc as any).text = (t: any, ...a: any[]) => rawText(typeof t === 'string' ? clean(t) : t, ...a);
+  doc.pipe(out);
+  doc.rect(0, 0, 288, 54).fill(BRAND.navy); doc.rect(0, 54, 288, 3).fill(BRAND.magenta);
+  if (branded) { try { doc.image(BRAND.logo, 14, 7, { fit: [40, 40] }); } catch { /* ignore */ } }
+  doc.font(head).fontSize(13).fillColor('#fff').text(BRAND.name, branded ? 62 : 14, 13, { lineBreak: false });
+  doc.font(body).fontSize(7.5).fillColor(BRAND.sky).text(BRAND.tagline.toUpperCase(), branded ? 62 : 14, 31, { characterSpacing: 1, lineBreak: false });
+  doc.font(head).fontSize(23).fillColor(BRAND.navy).text(s.shipment_no, 14, 68, { width: 260, align: 'center', lineBreak: false });
+  const qr = await QRCode.toBuffer(s.shipment_no, { margin: 1, width: 300, errorCorrectionLevel: 'M' });
+  doc.image(qr, 74, 100, { fit: [140, 140] });
+  doc.font(bold).fontSize(12).fillColor(BRAND.ink).text(s.customer, 14, 246, { width: 260, align: 'center' });
+  doc.font(body).fontSize(9).fillColor(BRAND.mute).text(`Job ${s.job_no}${s.po_no ? '   ·   PO ' + s.po_no : ''}${s.plant ? '   ·   ' + s.plant : ''}`, 14, doc.y + 2, { width: 260, align: 'center' });
+  if (s.ship_to_name || s.ship_to_address) doc.font(body).fontSize(9).fillColor(BRAND.ink).text('SHIP TO: ' + [s.ship_to_name, s.ship_to_address].filter(Boolean).join(', '), 20, doc.y + 8, { width: 248, align: 'center' });
+  const facts = [s.pieces != null && `${s.pieces} pcs`, s.weight_lb != null && `${s.weight_lb} lb`, s.length_in != null && `${(s.length_in / 12).toFixed(1)} ft long`].filter(Boolean).join('   ·   ');
+  if (facts) doc.font(bold).fontSize(10).fillColor(BRAND.ink).text(facts, 14, doc.y + 6, { width: 260, align: 'center' });
+  const rel = !!s.released_at && s.status !== 'cancelled';
+  const open = d.flags.filter((f: any) => f.status === 'open').length;
+  const col = rel ? (s.release_override_reason ? '#b45309' : '#15803d') : '#b91c1c';
+  doc.roundedRect(14, 356, 260, 62, 6).lineWidth(2.5).strokeColor(col).stroke();
+  doc.font(head).fontSize(rel ? 17 : 15).fillColor(col).text(rel ? (s.release_override_reason ? 'QC RELEASED (OVERRIDE)' : 'QC RELEASED') : 'HOLD — NOT RELEASED', 14, 366, { width: 260, align: 'center', lineBreak: false });
+  doc.font(body).fontSize(8).fillColor(BRAND.mute).text(rel ? `${fmt(s.released_at)} · ${s.released_by_name}${open ? ' · ' + open + ' open flag(s)' : ''}` : 'Do not load or ship until a QC manager releases this shipment', 20, 393, { width: 248, align: 'center' });
+  doc.end();
+  await new Promise<void>((resolve, reject) => { out.on('finish', resolve); out.on('error', reject); });
 }

@@ -22,7 +22,7 @@ export function seed(opts: { demoUsers?: boolean } = {}) {
       : [['admin', 'Administrator', 'admin', '']];
     db.transaction(() => {
       for (const [username, name, role, pin] of users) {
-        const r = db.prepare('INSERT INTO users(username,name,role,password_hash,created_at) VALUES (?,?,?,?,?)').run(username, name, role, hashPassword(opts.demoUsers ? 'changeme123' : 'admin1234'), now);
+        const r = db.prepare('INSERT INTO users(username,name,role,password_hash,created_at,must_change) VALUES (?,?,?,?,?,?)').run(username, name, role, hashPassword(opts.demoUsers ? 'changeme123' : 'admin1234'), now, opts.demoUsers ? 0 : 1);
         if (pin) setPin(Number(r.lastInsertRowid), pin);
       }
     })();

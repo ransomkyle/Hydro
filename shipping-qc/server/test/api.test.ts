@@ -134,7 +134,7 @@ describe('shipping QC', () => {
     assert.equal(crypto.createHash('sha256').update(key).digest('hex'), u.pinVerifier, 'device-side PIN check value matches');
     const clientAt = new Date(Date.now() - 3600_000).toISOString();
     const opId = crypto.randomUUID();
-    const canonical = [opId, 'sign', it2.id, 'pass', '', '', clientAt].join('|');
+    const canonical = [opId, 'sign', it2.id, 'pass', '', '', clientAt, ''].join('|');
     const proof = crypto.createHmac('sha256', key).update(canonical).digest('hex');
     const bad = await api('POST', `/api/shipments/items/${it2.id}/sign`, 'operator', { result: 'pass', opId, clientAt, offline: true, userId: u.user.id, proof: 'a'.repeat(64) });
     assert.equal(bad.status, 403);
@@ -145,7 +145,7 @@ describe('shipping QC', () => {
     assert.equal(row.done_at, clientAt); assert.equal(row.done_offline, 1);
     assert.ok(Date.parse(row.done_received_at) > Date.parse(clientAt));
     const future = new Date(Date.now() + 3600_000).toISOString();
-    const c2 = [crypto.randomUUID(), 'sign', byText('Photo: packaged').id, 'pass', '', '', future].join('|');
+    const c2 = [crypto.randomUUID(), 'sign', byText('Photo: packaged').id, 'pass', '', '', future, ''].join('|');
     const f = await api('POST', `/api/shipments/items/${byText('Photo: packaged').id}/sign`, 'operator', { result: 'pass', opId: c2.split('|')[0], clientAt: future, offline: true, userId: u.user.id, proof: crypto.createHmac('sha256', key).update(c2).digest('hex') });
     assert.equal(f.status, 400, 'future device clock rejected');
   });

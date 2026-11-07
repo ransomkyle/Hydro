@@ -220,4 +220,61 @@ CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit_log
 BEGIN SELECT RAISE(ABORT, 'audit_log is append-only'); END;
 `);
 
+/** Lightweight forward-only migrations so an existing database picks up new columns/tables on upgrade. */
+function addColumn(table: string, col: string, def: string) {
+  const cols = (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(c => c.name);
+  if (!cols.includes(col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+}
+addColumn('shipments', 'plant', 'TEXT');
+addColumn('users', 'email', 'TEXT');
+addColumn('users', 'token_version', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('users', 'must_change', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('checklist_items', 'gauge_no', 'TEXT');
+addColumn('templates', 'edited_by', 'INTEGER');
+addColumn('templates', 'approved_by', 'INTEGER');
+addColumn('templates', 'approved_at', 'TEXT');
+
+db.exec(`
+CREATE TABLE IF NOT EXISTS gauges (
+  id INTEGER PRIMARY KEY,
+  gauge_no TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  description TEXT NOT NULL,
+  plant TEXT,
+  cal_date TEXT,                       -- YYYY-MM-DD of last calibration
+  cal_due TEXT NOT NULL,               -- YYYY-MM-DD; sign-offs using the gauge after this date are rejected
+  cal_cert TEXT,
+  status TEXT NOT NULL DEFAULT 'active',   -- active | out_of_service | retired
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS capas (
+  id INTEGER PRIMARY KEY,
+  capa_no TEXT NOT NULL UNIQUE,
+  shipment_id INTEGER REFERENCES shipments(id) ON DELETE SET NULL,
+  flag_id INTEGER REFERENCES flags(id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  containment TEXT,
+  root_cause TEXT,
+  corrective_action TEXT,
+  preventive_action TEXT,
+  owner_id INTEGER REFERENCES users(id),
+  due_date TEXT,
+  status TEXT NOT NULL DEFAULT 'open',     -- open | in_progress | closed
+  effectiveness_check TEXT,
+  opened_by INTEGER NOT NULL REFERENCES users(id),
+  opened_at TEXT NOT NULL,
+  closed_by INTEGER REFERENCES users(id),
+  closed_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_capas_status ON capas(status);
+
+-- Persistent brute-force counters (survive restarts).
+CREATE TABLE IF NOT EXISTS throttle (
+  key TEXT PRIMARY KEY,
+  n INTEGER NOT NULL DEFAULT 0,
+  locked_until INTEGER NOT NULL DEFAULT 0
+);
+`);
+
 export const nowIso = () => new Date().toISOString();

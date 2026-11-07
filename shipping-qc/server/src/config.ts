@@ -33,3 +33,13 @@ function loadSecret(): string {
   return s;
 }
 export const JWT_SECRET = loadSecret();
+
+/** Plants/sites. Semicolon-separated; the first is the default for new shipments. */
+export const PLANTS = (process.env.QC_PLANTS ?? 'Hiawatha (HQ);Lisbon').split(';').map(x => x.trim()).filter(Boolean);
+/** Set to 1 to block new shipments from using checklist templates a QC manager has not approved. */
+export const REQUIRE_APPROVED_TEMPLATES = process.env.QC_REQUIRE_APPROVED_TEMPLATES === '1';
+/** A shipment left the dock "on time" if it departed within this many minutes after its pickup appointment. */
+export const ON_TIME_GRACE_MIN = Number(process.env.ON_TIME_GRACE_MIN ?? 60);
+export const SMTP_URL = process.env.SMTP_URL ?? '';        // e.g. smtps://user:pass@smtp.office365.com ; "json" = capture in memory (tests)
+export const SMTP_FROM = process.env.SMTP_FROM ?? 'DAD Shipping QC <noreply@localhost>';
+export const APP_URL = process.env.APP_URL ?? '';           // public https URL, used for links in emails

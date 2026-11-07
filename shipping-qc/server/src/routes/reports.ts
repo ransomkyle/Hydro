@@ -5,7 +5,7 @@ import { authenticate, requireRole } from '../auth.js';
 import { db, nowIso } from '../db.js';
 import { readiness } from '../readiness.js';
 import { HttpError, toCsv, wrap } from '../util.js';
-import { buildPackage } from '../pdf.js';
+import { buildLabel, buildPackage } from '../pdf.js';
 
 export const router = Router();
 router.use(authenticate);
@@ -110,4 +110,21 @@ router.get('/shipments/:id/package.pdf', wrap(async (req, res) => {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="${ship}-quality-release.pdf"`);
   await buildPackage(id, res);
+}));
+
+router.get('/shipments/:id/label.pdf', wrap(async (req, res) => {
+  const id = Number(req.params.id);
+  const row = db.prepare('SELECT shipment_no FROM shipments WHERE id=?').get(id) as any;
+  if (!row) throw new HttpError(404, 'Shipment not found');
+  audit({ actor: { id: req.user!.id, name: req.user!.name }, action: 'export.label', entity: 'shipment', entityId: id, shipmentId: id, detail: {} });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="${row.shipment_no}-label.pdf"`);
+  await buildLabel(id, res);
+}));
+
+/** Latest audit hash + entry count. Record it somewhere independent (print it, email it, store it off-box) to prove later that history was not rewritten. */
+router.get('/audit/anchor', auditViewers, wrap((_req, res) => {
+  const last = db.prepare('SELECT id,hash,at FROM audit_log ORDER BY id DESC LIMIT 1').get() as any;
+  const v = verifyChain();
+  res.json({ entries: v.count, chainIntact: v.ok, lastId: last?.id ?? 0, lastHash: last?.hash ?? null, lastAt: last?.at ?? null, generatedAt: new Date().toISOString() });
 }));

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { audit } from '../audit.js';
-import { authenticate, requireRole } from '../auth.js';
+import { authenticate, requireRole, verifyPinOnline } from '../auth.js';
 import { db, nowIso } from '../db.js';
 import { HttpError, wrap } from '../util.js';
 
@@ -20,7 +20,7 @@ const Body = z.object({
 
 router.get('/', wrap((req, res) => {
   const all = req.query.all === '1';
-  res.json(db.prepare(`SELECT t.*, (SELECT COUNT(*) FROM template_items i WHERE i.template_id=t.id) AS item_count FROM templates t ${all ? '' : 'WHERE t.active=1'} ORDER BY t.category='base' DESC, t.category='customer', t.name`).all());
+  res.json(db.prepare(`SELECT t.*, (SELECT name FROM users WHERE id=t.approved_by) AS approved_by_name, (SELECT COUNT(*) FROM template_items i WHERE i.template_id=t.id) AS item_count FROM templates t ${all ? '' : 'WHERE t.active=1'} ORDER BY t.category='base' DESC, t.category='customer', t.name`).all());
 }));
 router.get('/:id', wrap((req, res) => {
   const t = db.prepare('SELECT * FROM templates WHERE id=?').get(Number(req.params.id));
@@ -38,7 +38,7 @@ router.post('/', requireRole('manager', 'admin'), wrap((req, res) => {
   const b = Body.parse(req.body);
   const id = db.transaction(() => {
     const now = nowIso();
-    const r = db.prepare(`INSERT INTO templates(name,description,customer,category,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?,?)`).run(b.name, b.description ?? null, b.customer ?? null, b.category, req.user!.id, now, now);
+    const r = db.prepare(`INSERT INTO templates(name,description,customer,category,created_by,created_at,updated_at,edited_by) VALUES (?,?,?,?,?,?,?,?)`).run(b.name, b.description ?? null, b.customer ?? null, b.category, req.user!.id, now, now, req.user!.id);
     const tid = Number(r.lastInsertRowid);
     writeItems(tid, b.items);
     audit({ actor: { id: req.user!.id, name: req.user!.name }, action: 'template.create', entity: 'template', entityId: tid, detail: { name: b.name, items: b.items.length } });
@@ -53,9 +53,9 @@ router.put('/:id', requireRole('manager', 'admin'), wrap((req, res) => {
   if (!t) throw new HttpError(404, 'Template not found');
   const b = Body.parse(req.body);
   db.transaction(() => {
-    db.prepare(`UPDATE templates SET name=?,description=?,customer=?,category=?,version=version+1,updated_at=? WHERE id=?`).run(b.name, b.description ?? null, b.customer ?? null, b.category, nowIso(), id);
+    db.prepare(`UPDATE templates SET name=?,description=?,customer=?,category=?,version=version+1,updated_at=?,edited_by=?,approved_by=NULL,approved_at=NULL WHERE id=?`).run(b.name, b.description ?? null, b.customer ?? null, b.category, nowIso(), req.user!.id, id);
     writeItems(id, b.items);
-    audit({ actor: { id: req.user!.id, name: req.user!.name }, action: 'template.update', entity: 'template', entityId: id, detail: { name: b.name, version: t.version + 1, items: b.items.length, note: 'Shipments already created keep their own copy of the checklist' } });
+    audit({ actor: { id: req.user!.id, name: req.user!.name }, action: 'template.update', entity: 'template', entityId: id, detail: { name: b.name, version: t.version + 1, items: b.items.length, note: 'Shipments already created keep their own copy of the checklist; approval was cleared and must be re-granted' } });
   })();
   res.json({ id });
 }));
@@ -66,6 +66,23 @@ router.post('/:id/archive', requireRole('manager', 'admin'), wrap((req, res) => 
   db.transaction(() => {
     db.prepare('UPDATE templates SET active=?, updated_at=? WHERE id=?').run(active, nowIso(), id);
     audit({ actor: { id: req.user!.id, name: req.user!.name }, action: active ? 'template.restore' : 'template.archive', entity: 'template', entityId: id, detail: {} });
+  })();
+  res.json({ ok: true });
+}));
+
+/** Document-control sign-off: a QC manager approves a template version. Needs a different person than the last editor (unless the shop has a single active manager). */
+router.post('/:id/approve', requireRole('manager'), wrap((req, res) => {
+  const id = Number(req.params.id);
+  const { pin } = z.object({ pin: z.string().max(20) }).parse(req.body);
+  const t = db.prepare('SELECT * FROM templates WHERE id=?').get(id) as any;
+  if (!t) throw new HttpError(404, 'Template not found');
+  verifyPinOnline(req.user!, pin);
+  const managers = (db.prepare("SELECT COUNT(*) n FROM users WHERE role='manager' AND active=1").get() as any).n;
+  const self = t.edited_by === req.user!.id;
+  if (self && managers > 1) throw new HttpError(403, 'A different QC manager than the last editor must approve this version');
+  db.transaction(() => {
+    db.prepare('UPDATE templates SET approved_by=?, approved_at=? WHERE id=?').run(req.user!.id, nowIso(), id);
+    audit({ actor: { id: req.user!.id, name: req.user!.name }, action: 'template.approve', entity: 'template', entityId: id, detail: { name: t.name, version: t.version, selfApproved: self } });
   })();
   res.json({ ok: true });
 }));

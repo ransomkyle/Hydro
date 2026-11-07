@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { audit, type Actor } from '../audit.js';
 import { authenticate, canSignRole, getUser, requireRole, verifyOfflineProof, verifyPinOnline, type User } from '../auth.js';
+import { PLANTS, REQUIRE_APPROVED_TEMPLATES } from '../config.js';
 import { db, nowIso } from '../db.js';
 import { notifyRoles } from '../notify.js';
 import { readiness } from '../readiness.js';
@@ -15,7 +16,7 @@ const LOCKED = ['released', 'shipped', 'delivered', 'cancelled'];
 /** Editable even after release (needed at pickup), but never after delivery/cancel. */
 const LOGISTICS_FIELDS = ['carrier', 'equipment_type', 'truck_no', 'trailer_no', 'driver_name', 'driver_id_no', 'bol_no', 'pro_no', 'seal_no',
   'permit_no', 'escort_required', 'rigging_notes', 'tiedown_notes', 'pickup_appt', 'ship_from_dock', 'ship_to_name', 'ship_to_address', 'weight_lb', 'length_in', 'width_in', 'height_in', 'pieces'];
-const HEADER_FIELDS = ['job_no', 'customer', 'po_no', 'description', 'special_requirements', 'size_class', 'is_sanitary', 'is_pressure', 'requested_ship_date'];
+const HEADER_FIELDS = ['plant', 'job_no', 'customer', 'po_no', 'description', 'special_requirements', 'size_class', 'is_sanitary', 'is_pressure', 'requested_ship_date'];
 
 function getShipment(id: number): any {
   const s = db.prepare('SELECT * FROM shipments WHERE id=?').get(id);
@@ -40,6 +41,7 @@ router.get('/', wrap((req, res) => {
   if (q.status) { where.push('s.status = ?'); args.push(String(q.status)); }
   else if (q.active === '1') where.push(`s.status IN ('draft','in_progress','released')`);
   if (q.customer) { where.push('s.customer LIKE ?'); args.push(`%${q.customer}%`); }
+  if (q.plant) { where.push('s.plant = ?'); args.push(String(q.plant)); }
   if (q.from) { where.push('s.created_at >= ?'); args.push(String(q.from)); }
   if (q.to) { where.push('s.created_at <= ?'); args.push(String(q.to) + 'T23:59:59.999Z'); }
   if (q.flags === '1') where.push(`EXISTS (SELECT 1 FROM flags f WHERE f.shipment_id=s.id AND f.status='open')`);
@@ -51,7 +53,7 @@ router.get('/', wrap((req, res) => {
     args.push(t, t, t, t, t, t, t, t, t, t);
   }
   const limit = Math.min(Number(q.limit ?? 200), 500), offset = Number(q.offset ?? 0);
-  const rows = db.prepare(`SELECT s.id,s.shipment_no,s.job_no,s.customer,s.po_no,s.description,s.status,s.size_class,s.is_sanitary,s.is_pressure,
+  const rows = db.prepare(`SELECT s.id,s.shipment_no,s.plant,s.job_no,s.customer,s.po_no,s.description,s.status,s.size_class,s.is_sanitary,s.is_pressure,
       s.pickup_appt,s.requested_ship_date,s.created_at,s.released_at,s.weight_lb,s.length_in,
       (SELECT COUNT(*) FROM checklist_items c WHERE c.shipment_id=s.id) AS items_total,
       (SELECT COUNT(*) FROM checklist_items c WHERE c.shipment_id=s.id AND c.status!='pending') AS items_done,
@@ -63,7 +65,7 @@ router.get('/', wrap((req, res) => {
 const num = z.coerce.number().finite().nonnegative().optional().nullable();
 const str = (n = 500) => z.string().max(n).optional().nullable();
 const ShipmentBody = z.object({
-  job_no: z.string().min(1).max(60), customer: z.string().min(1).max(120), po_no: str(60), description: str(1000),
+  plant: str(60), job_no: z.string().min(1).max(60), customer: z.string().min(1).max(120), po_no: str(60), description: str(1000),
   special_requirements: str(2000), size_class: z.enum(['small', 'standard', 'oversize']).default('standard'),
   is_sanitary: z.boolean().default(false), is_pressure: z.boolean().default(false),
   length_in: num, width_in: num, height_in: num, weight_lb: num, pieces: z.coerce.number().int().nonnegative().optional().nullable(),
@@ -102,15 +104,22 @@ function cloneTemplatesInto(shipmentId: number, templateIds: number[]): number {
   return added;
 }
 
-router.post('/', requireRole('shipping', 'inspector', 'manager', 'admin'), wrap((req, res) => {
-  const body = ShipmentBody.extend({
-    templateIds: z.array(z.number().int()).default([]),
-    parts: z.array(PartBody).default([]),
-  }).parse(req.body);
-  const user = req.user!;
-  const created = db.transaction(() => {
+const CreateBody = ShipmentBody.extend({
+  templateIds: z.array(z.number().int()).default([]),
+  parts: z.array(PartBody).default([]),
+});
+export type CreateInput = z.infer<typeof CreateBody>;
+
+/** Creates a shipment with its checklist copy and parts, and audits it. Used by the form and by CSV import. */
+export function createShipment(user: User, body: CreateInput): number {
+  const plant = body.plant ?? PLANTS[0] ?? null;
+  if (plant && PLANTS.length && !PLANTS.includes(plant)) throw new HttpError(400, `Unknown plant. Choose one of: ${PLANTS.join(', ')}`);
+  const unapproved = body.templateIds.length ? (db.prepare(`SELECT id,name FROM templates WHERE approved_at IS NULL AND id IN (${body.templateIds.map(() => '?').join(',')})`).all(...body.templateIds) as any[]) : [];
+  if (unapproved.length && REQUIRE_APPROVED_TEMPLATES) throw new HttpError(409, `These checklist templates have not been approved by a QC manager: ${unapproved.map(t => t.name).join('; ')}`);
+  return db.transaction(() => {
     const now = nowIso();
-    const { templateIds, parts, ...f } = body;
+    const { templateIds, parts, ...rest } = body;
+    const f = { ...rest, plant };
     const cols = Object.keys(f) as (keyof typeof f)[];
     const vals = cols.map(c => typeof f[c] === 'boolean' ? (f[c] ? 1 : 0) : (f[c] ?? null));
     const no = nextShipmentNo();
@@ -120,10 +129,14 @@ router.post('/', requireRole('shipping', 'inspector', 'manager', 'admin'), wrap(
     const added = cloneTemplatesInto(id, templateIds);
     const insPart = db.prepare(`INSERT INTO parts(shipment_id,part_no,description,qty,grade,heat_no,finish,drawing_rev,length_in,weight_lb) VALUES (?,?,?,?,?,?,?,?,?,?)`);
     for (const p of parts) insPart.run(id, p.part_no ?? null, p.description ?? null, p.qty, p.grade ?? null, p.heat_no ?? null, p.finish ?? null, p.drawing_rev ?? null, p.length_in ?? null, p.weight_lb ?? null);
-    audit({ actor: actorOf(user), action: 'shipment.create', entity: 'shipment', entityId: id, shipmentId: id, detail: { shipment_no: no, job_no: f.job_no, customer: f.customer, templateIds, checklistItems: added, parts: parts.length } });
+    audit({ actor: actorOf(user), action: 'shipment.create', entity: 'shipment', entityId: id, shipmentId: id, detail: { shipment_no: no, job_no: f.job_no, customer: f.customer, templateIds, checklistItems: added, parts: parts.length, plant, unapprovedTemplates: unapproved.map(t => t.name) } });
     return id;
   })();
-  res.status(201).json(loadDetail(created));
+}
+
+router.post('/', requireRole('shipping', 'inspector', 'manager', 'admin'), wrap((req, res) => {
+  const id = createShipment(req.user!, CreateBody.parse(req.body));
+  res.status(201).json(loadDetail(id));
 }));
 
 // ---------------------------------------------------------------- detail
@@ -250,12 +263,12 @@ const SignBase = z.object({
   pin: z.string().max(20).optional(), proof: z.string().max(200).optional(), userId: z.number().int().optional(),
   opId: z.string().max(80).optional(), offline: z.boolean().optional(), clientAt: z.string().max(40).optional(),
 });
-const SignBody = SignBase.extend({ result: z.enum(['pass', 'fail', 'na']), value: z.string().max(500).optional(), note: z.string().max(2000).optional() });
+const SignBody = SignBase.extend({ result: z.enum(['pass', 'fail', 'na']), value: z.string().max(500).optional(), note: z.string().max(2000).optional(), gauge: z.string().max(40).optional() });
 const VerifyBody = SignBase.extend({ note: z.string().max(2000).optional() });
 
 /** Canonical string both device and server HMAC for offline sign-offs. Keep in sync with web/src/lib/crypto.ts */
-export const canonicalSign = (action: string, itemId: number, b: { opId?: string; result?: string; value?: string; note?: string; clientAt?: string }) =>
-  [b.opId ?? '', action, itemId, b.result ?? '', b.value ?? '', b.note ?? '', b.clientAt ?? ''].join('|');
+export const canonicalSign = (action: string, itemId: number, b: { opId?: string; result?: string; value?: string; note?: string; clientAt?: string; gauge?: string }) =>
+  [b.opId ?? '', action, itemId, b.result ?? '', b.value ?? '', b.note ?? '', b.clientAt ?? '', b.gauge ?? ''].join('|');
 
 function resolveSigner(req: any, body: z.infer<typeof SignBase>, canonical: string): { user: User; offline: boolean } {
   if (body.proof && body.offline) {
@@ -279,7 +292,7 @@ router.post('/items/:itemId/sign', noAuditors, wrap((req, res) => {
   if (user.role === 'auditor') throw new HttpError(403, 'Auditors are read-only');
   if (!canSignRole(user.role, item.signer_role)) throw new HttpError(403, `This item must be signed by ${item.signer_role === 'manager' ? 'a QC manager' : 'a QC inspector or manager'}`);
   if (item.status !== 'pending') throw new HttpError(409, `Item already signed ${item.status.toUpperCase()} — revoke it first to change`);
-  const note = body.note?.trim(), value = body.value?.trim();
+  const note = body.note?.trim(), value = body.value?.trim(), gaugeNo = body.gauge?.trim() || null;
   if ((body.result === 'fail' || body.result === 'na') && !note) throw new HttpError(400, body.result === 'fail' ? 'Describe what failed' : 'Give a reason for N/A');
   if (body.result === 'pass') {
     if (item.kind === 'value' && !value) throw new HttpError(400, `Enter the measured/recorded value${item.unit ? ' (' + item.unit + ')' : ''}`);
@@ -290,12 +303,19 @@ router.post('/items/:itemId/sign', noAuditors, wrap((req, res) => {
   }
   const at = effectiveTime(offline || body.offline, body.clientAt);
   const now = nowIso();
+  if (gaugeNo) {
+    if (item.kind !== 'value') throw new HttpError(400, 'A gauge can only be recorded on a measurement item');
+    const g = db.prepare('SELECT * FROM gauges WHERE gauge_no=?').get(gaugeNo) as any;
+    if (!g) throw new HttpError(400, `Gauge "${gaugeNo}" is not in the calibration register`);
+    if (g.status !== 'active') throw new HttpError(400, `Gauge ${g.gauge_no} is ${g.status.replace('_', ' ')} and cannot be used`);
+    if (body.result === 'pass' && g.cal_due < at.slice(0, 10)) throw new HttpError(400, `Gauge ${g.gauge_no} calibration expired on ${g.cal_due} — use an in-calibration gauge`);
+  }
   db.transaction(() => {
-    db.prepare(`UPDATE checklist_items SET status=?,value=?,note=?,done_by=?,done_at=?,done_received_at=?,done_offline=?,verified_by=NULL,verified_at=NULL,verify_note=NULL WHERE id=?`)
-      .run(body.result, value ?? null, note ?? null, user.id, at, now, offline ? 1 : 0, itemId);
+    db.prepare(`UPDATE checklist_items SET status=?,value=?,note=?,gauge_no=?,done_by=?,done_at=?,done_received_at=?,done_offline=?,verified_by=NULL,verified_at=NULL,verify_note=NULL WHERE id=?`)
+      .run(body.result, value ?? null, note ?? null, gaugeNo, user.id, at, now, offline ? 1 : 0, itemId);
     if (ship.status === 'draft') db.prepare(`UPDATE shipments SET status='in_progress', updated_at=? WHERE id=?`).run(now, ship.id);
     audit({ actor: actorOf(user), action: `item.${body.result}`, entity: 'checklist_item', entityId: itemId, shipmentId: ship.id, eventAt: at, offline,
-      detail: { section: item.section, text: item.text, result: body.result, value, note, method: offline ? 'pin-offline-hmac' : 'pin', clientAt: body.clientAt, signedBy: user.name, tokenUser: req.user!.name } });
+      detail: { section: item.section, text: item.text, result: body.result, value, note, gauge: gaugeNo, method: offline ? 'pin-offline-hmac' : 'pin', clientAt: body.clientAt, signedBy: user.name, tokenUser: req.user!.name } });
     if (body.result === 'fail') {
       const sev = item.signer_role !== 'any' || item.needs_verification ? 'critical' : 'major';
       const r = db.prepare(`INSERT INTO flags(shipment_id,item_id,severity,description,auto,raised_by,raised_at) VALUES (?,?,?,?,1,?,?)`)
@@ -344,7 +364,7 @@ router.post('/items/:itemId/revoke', requireRole('inspector', 'manager'), wrap((
   db.transaction(() => {
     audit({ actor: actorOf(req.user!), action: 'item.revoke', entity: 'checklist_item', entityId: itemId, shipmentId: ship.id,
       detail: { reason: body.reason, previous: { status: item.status, value: item.value, note: item.note, done_by: item.done_by, done_at: item.done_at, verified_by: item.verified_by, verified_at: item.verified_at } } });
-    db.prepare(`UPDATE checklist_items SET status='pending',value=NULL,note=NULL,done_by=NULL,done_at=NULL,done_received_at=NULL,done_offline=0,verified_by=NULL,verified_at=NULL,verified_offline=0,verify_note=NULL WHERE id=?`).run(itemId);
+    db.prepare(`UPDATE checklist_items SET status='pending',value=NULL,note=NULL,gauge_no=NULL,done_by=NULL,done_at=NULL,done_received_at=NULL,done_offline=0,verified_by=NULL,verified_at=NULL,verified_offline=0,verify_note=NULL WHERE id=?`).run(itemId);
   })();
   res.json(loadDetail(ship.id));
 }));
