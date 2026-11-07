@@ -20,8 +20,8 @@ export default function Layout() {
       <header className="top">
         <div className="top-in">
           <Link to="/" className="brand">
-            <svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#2b4a68" /><path d="M32 10l18 7v14c0 11-7.500 19-18 23C21.500 50 14 42 14 31V17z" fill="#d7e0e8" /><path d="M24 32l6 6 11-13" fill="none" stroke="#14212e" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            <span>Shipping QC</span>
+            <img src="/dad-logo.png" alt="DAD Manufacturing" />
+            <span><small>DAD Manufacturing</small><b>Shipping QC</b></span>
           </Link>
           <nav className="nav" aria-label="Main">
             <NavLink to="/" end>Dashboard</NavLink>

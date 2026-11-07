@@ -14,7 +14,7 @@ export const WEB_DIST = path.resolve(here, process.env.QC_WEB_DIST ?? '../../web
 export const PORT = Number(process.env.PORT ?? 4100);
 /** IANA timezone used when rendering timestamps in the PDF package. */
 export const SHOP_TZ = process.env.SHOP_TZ ?? 'America/Chicago';
-export const COMPANY_NAME = process.env.COMPANY_NAME ?? 'Stainless Fabrication — Quality Department';
+export const COMPANY_NAME = process.env.COMPANY_NAME ?? 'DAD Manufacturing, Inc.';
 export const NOTIFY_WEBHOOK_URL = process.env.NOTIFY_WEBHOOK_URL ?? '';
 export const TOKEN_TTL_HOURS = Number(process.env.TOKEN_TTL_HOURS ?? 12);
 export const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB ?? 25);

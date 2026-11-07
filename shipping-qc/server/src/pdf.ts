@@ -2,10 +2,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Writable } from 'node:stream';
 import PDFDocument from 'pdfkit';
-import { COMPANY_NAME, SHOP_TZ, UPLOAD_DIR } from './config.js';
+import { BRAND, FONT_FILES, hasBrandAssets } from './brand.js';
+import { SHOP_TZ, UPLOAD_DIR } from './config.js';
 import { verifyChain } from './audit.js';
 import { db } from './db.js';
 import { loadDetail } from './routes/shipments.js';
+
+/** Font names; falls back to built-in Helvetica if the bundled brand fonts are missing. */
+const F = { body: 'Helvetica', semi: 'Helvetica-Bold', bold: 'Helvetica-Bold', head: 'Helvetica-Bold', headBold: 'Helvetica-Bold' };
+/** The bundled Latin font subset lacks a few symbols that appear in checklist text; map them to safe equivalents. */
+const clean = (t: string) => t.replace(/≤/g, '<=').replace(/≥/g, '>=').replace(/→/g, '->').replace(/[✔✓]/g, '').replace(/⚠/g, '!').replace(/[\u2010-\u2011]/g, '-');
 
 const fmt = (iso?: string | null) => {
   if (!iso) return '—';
@@ -21,33 +27,55 @@ export function buildPackage(shipmentId: number, out: Writable): Promise<void> {
   const d = loadDetail(shipmentId);
   const s = d.shipment as any;
   const users = new Map((db.prepare('SELECT id,name FROM users').all() as any[]).map(u => [u.id, u.name]));
-  const doc = new PDFDocument({ size: 'LETTER', margin: 42, bufferPages: true, info: { Title: `Quality Release ${s.shipment_no}`, Author: COMPANY_NAME } });
+  const doc = new PDFDocument({ size: 'LETTER', margins: { top: 56, bottom: 42, left: 42, right: 42 }, bufferPages: true, info: { Title: `Quality Release ${s.shipment_no}`, Author: BRAND.name } });
+  const branded = hasBrandAssets();
+  if (branded) {
+    doc.registerFont('Body', FONT_FILES.body); doc.registerFont('Semi', FONT_FILES.semi); doc.registerFont('Bold', FONT_FILES.bold);
+    doc.registerFont('Head', FONT_FILES.head); doc.registerFont('HeadBold', FONT_FILES.headBold);
+    Object.assign(F, { body: 'Body', semi: 'Semi', bold: 'Bold', head: 'Head', headBold: 'HeadBold' });
+  } else Object.assign(F, { body: 'Helvetica', semi: 'Helvetica-Bold', bold: 'Helvetica-Bold', head: 'Helvetica-Bold', headBold: 'Helvetica-Bold' });
+  const rawText = doc.text.bind(doc) as any;
+  (doc as any).text = (t: any, ...a: any[]) => rawText(typeof t === 'string' ? clean(t) : t, ...a);
   doc.pipe(out);
   const W = doc.page.width - 84;
-  const ink = '#16202a', mute = '#5b6b7a', line = '#c9d3dc';
+  const { ink, mute, line, navy, magenta } = BRAND;
   const ensure = (h: number) => { if (doc.y + h > doc.page.height - 60) doc.addPage(); };
-  const h2 = (t: string) => { ensure(60); doc.x = 42; doc.moveDown(0.8).font('Helvetica-Bold').fontSize(12).fillColor(ink).text(t.toUpperCase(), { characterSpacing: 0.5 }); doc.moveTo(42, doc.y + 2).lineTo(42 + W, doc.y + 2).strokeColor(line).stroke(); doc.moveDown(0.5); };
+  const h2 = (t: string) => {
+    ensure(60); doc.x = 42; doc.moveDown(0.8).font(F.headBold).fontSize(11.5).fillColor(navy).text(t.toUpperCase(), { characterSpacing: 0.8 });
+    const y = doc.y + 2;
+    doc.moveTo(42, y).lineTo(42 + W, y).lineWidth(0.6).strokeColor(line).stroke();
+    doc.moveTo(42, y).lineTo(42 + 34, y).lineWidth(2.2).strokeColor(magenta).stroke(); doc.lineWidth(1);
+    doc.moveDown(0.5);
+  };
   const kv = (pairs: [string, unknown][], cols = 2) => {
     const cw = W / cols;
     for (let i = 0; i < pairs.length; i += cols) {
       ensure(30);
       const y = doc.y; let maxY = y;
       pairs.slice(i, i + cols).forEach(([k, v], c) => {
-        doc.font('Helvetica').fontSize(7.5).fillColor(mute).text(k.toUpperCase(), 42 + c * cw, y, { width: cw - 8 });
-        doc.font('Helvetica-Bold').fontSize(9.5).fillColor(ink).text(dash(v), 42 + c * cw, doc.y, { width: cw - 8 });
+        doc.font(F.body).fontSize(7.5).fillColor(mute).text(k.toUpperCase(), 42 + c * cw, y, { width: cw - 8 });
+        doc.font(F.bold).fontSize(9.5).fillColor(ink).text(dash(v), 42 + c * cw, doc.y, { width: cw - 8 });
         maxY = Math.max(maxY, doc.y); doc.y = y;
       });
       doc.y = maxY + 5; doc.x = 42;
     }
   };
 
-  // Header
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(mute).text(COMPANY_NAME.toUpperCase(), { characterSpacing: 1 });
-  doc.font('Helvetica-Bold').fontSize(20).fillColor(ink).text('Shipment Quality Release Package');
-  doc.font('Helvetica-Bold').fontSize(13).fillColor('#0b5cad').text(`${s.shipment_no}   ·   ${s.customer}   ·   Job ${s.job_no}`);
+  // Brand header band
+  const PW = doc.page.width;
+  doc.rect(0, 0, PW, 96).fill(navy); doc.rect(0, 96, PW, 3.5).fill(magenta);
+  if (branded) { try { doc.image(BRAND.logo, 42, 16, { fit: [66, 66] }); } catch { /* logo unreadable: continue without it */ } }
+  const tx = branded ? 122 : 42;
+  doc.font(F.headBold).fontSize(18).fillColor('#ffffff').text(BRAND.name, tx, 20, { lineBreak: false });
+  doc.font(F.semi).fontSize(9).fillColor(BRAND.sky).text(BRAND.tagline.toUpperCase(), tx, 44, { characterSpacing: 1.2, lineBreak: false });
+  doc.font(F.body).fontSize(8).fillColor('#d6e4f3').text(`${BRAND.address}   ·   ${BRAND.phone}   ·   ${BRAND.web}`, tx, 62, { lineBreak: false });
+  doc.font(F.body).fontSize(7.5).fillColor('#a9c4e0').text(BRAND.qms, tx, 76, { lineBreak: false });
+  doc.x = 42; doc.y = 116;
+  doc.font(F.headBold).fontSize(21).fillColor(navy).text('Shipment Quality Release Package');
+  doc.font(F.bold).fontSize(12.5).fillColor(ink).text(`${s.shipment_no}   ·   ${s.customer}   ·   Job ${s.job_no}`);
   const state = s.status === 'released' || s.status === 'shipped' || s.status === 'delivered' ? (s.release_override_reason ? 'RELEASED WITH OVERRIDE' : 'RELEASED') : s.status.toUpperCase().replace('_', ' ');
-  doc.moveDown(0.3).font('Helvetica-Bold').fontSize(10).fillColor(s.release_override_reason ? '#b45309' : s.released_at ? '#15803d' : '#b45309').text(`STATUS: ${state}`);
-  doc.font('Helvetica').fontSize(8).fillColor(mute).text(`Generated ${fmt(new Date().toISOString())} — all times ${SHOP_TZ}`);
+  doc.moveDown(0.3).font(F.bold).fontSize(10).fillColor(s.release_override_reason ? '#b45309' : s.released_at ? '#15803d' : '#b45309').text(`STATUS: ${state}`);
+  doc.font(F.body).fontSize(8).fillColor(mute).text(`Generated ${fmt(new Date().toISOString())} — all times ${SHOP_TZ}`);
 
   h2('Shipment');
   kv([['Customer PO', s.po_no], ['Size class', s.size_class], ['Description', s.description], ['Special requirements', s.special_requirements],
@@ -57,25 +85,25 @@ export function buildPackage(shipmentId: number, out: Writable): Promise<void> {
   h2('Release decision');
   kv([['Released by', s.released_by_name], ['Released at', fmt(s.released_at)]]);
   if (s.release_override_reason) {
-    doc.font('Helvetica-Bold').fontSize(9).fillColor('#b45309').text(`Released with documented override: ${s.release_override_reason}`);
-    for (const b of JSON.parse(s.release_snapshot ?? '[]')) doc.font('Helvetica').fontSize(8.5).fillColor(ink).text(`• ${b.message}`, { indent: 8 });
+    doc.font(F.bold).fontSize(9).fillColor('#b45309').text(`Released with documented override: ${s.release_override_reason}`);
+    for (const b of JSON.parse(s.release_snapshot ?? '[]')) doc.font(F.body).fontSize(8.5).fillColor(ink).text(`• ${b.message}`, { indent: 8 });
   }
 
   h2('Parts / line items');
-  if (!d.parts.length) doc.font('Helvetica').fontSize(9).fillColor(mute).text('None recorded.');
+  if (!d.parts.length) doc.font(F.body).fontSize(9).fillColor(mute).text('None recorded.');
   table(doc, W, [['Part #', 90], ['Description', 150], ['Qty', 35], ['Grade', 45], ['Heat #', 80], ['Finish', 60], ['Rev', 40]],
     (d.parts as any[]).map(p => [dash(p.part_no), dash(p.description), dash(p.qty), dash(p.grade), dash(p.heat_no), dash(p.finish), dash(p.drawing_rev)]), ensure);
 
   h2('Checklist sign-offs');
   let section = '';
   for (const i of d.items as any[]) {
-    if (i.section !== section) { section = i.section; ensure(34); doc.moveDown(0.3).font('Helvetica-Bold').fontSize(9.5).fillColor('#0b5cad').text(section); }
+    if (i.section !== section) { section = i.section; ensure(34); doc.moveDown(0.3).font(F.bold).fontSize(9.5).fillColor(navy).text(section); }
     ensure(44);
     const y = doc.y;
     const mark = i.status === 'pass' ? 'PASS' : i.status === 'fail' ? 'FAIL' : i.status === 'na' ? 'N/A' : 'OPEN';
     const colr = i.status === 'pass' ? '#15803d' : i.status === 'fail' ? '#b91c1c' : i.status === 'na' ? '#475569' : '#b45309';
-    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(colr).text(mark, 42, y, { width: 32 });
-    doc.font('Helvetica').fontSize(8.5).fillColor(ink).text(i.text + (i.required ? '' : '  (optional)'), 78, y, { width: W - 36 });
+    doc.font(F.bold).fontSize(8.5).fillColor(colr).text(mark, 42, y, { width: 32 });
+    doc.font(F.body).fontSize(8.5).fillColor(ink).text(i.text + (i.required ? '' : '  (optional)'), 78, y, { width: W - 36 });
     const meta: string[] = [];
     if (i.spec) meta.push(`Spec: ${i.spec}`);
     if (i.value) meta.push(`Value: ${i.value}${i.unit ? ' ' + i.unit : ''}`);
@@ -83,14 +111,14 @@ export function buildPackage(shipmentId: number, out: Writable): Promise<void> {
     if (i.done_by_name) meta.push(`Signed: ${i.done_by_name} — ${fmt(i.done_at)}${i.done_offline ? ' (recorded offline, synced ' + fmt(i.done_received_at) + ')' : ''}`);
     if (i.verified_by_name) meta.push(`Verified: ${i.verified_by_name} — ${fmt(i.verified_at)}${i.verified_offline ? ' (offline)' : ''}${i.verify_note ? ' — ' + i.verify_note : ''}`);
     else if (i.needs_verification && i.status === 'pass') meta.push('Verification: PENDING');
-    if (meta.length) doc.font('Helvetica').fontSize(7.5).fillColor(mute).text(meta.join('   |   '), 78, doc.y, { width: W - 36 });
+    if (meta.length) doc.font(F.body).fontSize(7.5).fillColor(mute).text(meta.join('   |   '), 78, doc.y, { width: W - 36 });
     doc.y += 3; doc.x = 42;
   }
 
   h2('Materials & traceability');
   const cat: Record<string, string> = { base_metal: 'Base metal', consumable: 'Consumable', packaging: 'Packaging' };
   const mats = (d.materials as any[]).filter(m => !m.voided);
-  if (!mats.length) doc.font('Helvetica').fontSize(9).fillColor(mute).text('None recorded.');
+  if (!mats.length) doc.font(F.body).fontSize(9).fillColor(mute).text('None recorded.');
   table(doc, W, [['Type', 55], ['Material', 125], ['Grade', 45], ['Heat / lot', 80], ['Qty', 50], ['Logged by', 75], ['When', 82]],
     mats.map(m => [cat[m.category] ?? m.category, dash(m.name), dash(m.grade), dash(m.heat_lot), m.qty != null ? `${m.qty} ${m.unit ?? ''}` : '—', dash(m.added_by_name), fmt(m.added_at)]), ensure);
 
@@ -101,29 +129,29 @@ export function buildPackage(shipmentId: number, out: Writable): Promise<void> {
   doc.moveDown(0.3);
   for (const e of d.events as any[]) {
     ensure(46);
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(ink).text(`${label[e.type] ?? e.type} — ${fmt(e.at)}${e.offline ? '  (recorded offline)' : ''}`);
+    doc.font(F.bold).fontSize(9).fillColor(ink).text(`${label[e.type] ?? e.type} — ${fmt(e.at)}${e.offline ? '  (recorded offline)' : ''}`);
     const bits = [e.location && `Place: ${e.location}`, e.lat != null && `GPS ${Number(e.lat).toFixed(5)}, ${Number(e.lng).toFixed(5)}${e.accuracy_m ? ' ±' + Math.round(e.accuracy_m) + 'm' : ''}`, e.person_name && `Person: ${e.person_name}`, `Recorded by ${e.recorded_by_name}`, e.note && `Note: ${e.note}`].filter(Boolean);
-    doc.font('Helvetica').fontSize(8).fillColor(mute).text(bits.join('   |   '));
+    doc.font(F.body).fontSize(8).fillColor(mute).text(bits.join('   |   '));
     if (e.signature_png) { try { ensure(50); doc.image(Buffer.from(e.signature_png.split(',')[1], 'base64'), 42, doc.y + 2, { fit: [160, 40] }); doc.y += 46; } catch { /* corrupt signature image */ } }
     doc.moveDown(0.3);
   }
-  if (!d.events.length) doc.font('Helvetica').fontSize(9).fillColor(mute).text('No logistics events recorded.');
+  if (!d.events.length) doc.font(F.body).fontSize(9).fillColor(mute).text('No logistics events recorded.');
 
   h2('Flags & nonconformances');
-  if (!d.flags.length) doc.font('Helvetica').fontSize(9).fillColor(mute).text('None raised.');
+  if (!d.flags.length) doc.font(F.body).fontSize(9).fillColor(mute).text('None raised.');
   for (const f of d.flags as any[]) {
     ensure(40);
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(f.status === 'open' ? '#b91c1c' : '#15803d').text(`${f.status.toUpperCase()} · ${f.severity.toUpperCase()} · raised ${fmt(f.raised_at)} by ${f.raised_by_name}`);
-    doc.font('Helvetica').fontSize(8.5).fillColor(ink).text(f.description);
-    if (f.status === 'resolved') doc.font('Helvetica').fontSize(8).fillColor(mute).text(`Resolved ${fmt(f.resolved_at)} by ${f.resolved_by_name} — ${String(f.disposition).replace('_', ' ')}: ${f.resolution}`);
+    doc.font(F.bold).fontSize(9).fillColor(f.status === 'open' ? '#b91c1c' : '#15803d').text(`${f.status.toUpperCase()} · ${f.severity.toUpperCase()} · raised ${fmt(f.raised_at)} by ${f.raised_by_name}`);
+    doc.font(F.body).fontSize(8.5).fillColor(ink).text(f.description);
+    if (f.status === 'resolved') doc.font(F.body).fontSize(8).fillColor(mute).text(`Resolved ${fmt(f.resolved_at)} by ${f.resolved_by_name} — ${String(f.disposition).replace('_', ' ')}: ${f.resolution}`);
     doc.moveDown(0.3);
   }
 
   const atts = (d.attachments as any[]).filter(a => !a.voided);
   h2('Attached documents');
   const docs = atts.filter(a => a.mime === 'application/pdf');
-  if (!docs.length) doc.font('Helvetica').fontSize(9).fillColor(mute).text('None.');
-  for (const a of docs) doc.font('Helvetica').fontSize(8.5).fillColor(ink).text(`• [${a.kind}] ${a.filename} — ${fmt(a.uploaded_at)} by ${a.uploaded_by_name}   SHA-256 ${a.sha256.slice(0, 16)}…`);
+  if (!docs.length) doc.font(F.body).fontSize(9).fillColor(mute).text('None.');
+  for (const a of docs) doc.font(F.body).fontSize(8.5).fillColor(ink).text(`• [${a.kind}] ${a.filename} — ${fmt(a.uploaded_at)} by ${a.uploaded_by_name}   SHA-256 ${a.sha256.slice(0, 16)}…`);
 
   const photos = atts.filter(a => /^image\/(jpeg|png)$/.test(a.mime));
   if (photos.length) ensure(210);
@@ -139,8 +167,8 @@ export function buildPackage(shipmentId: number, out: Writable): Promise<void> {
       try {
         const stored = (db.prepare('SELECT stored_as FROM attachments WHERE id=?').get(a.id) as any).stored_as;
         doc.image(path.join(UPLOAD_DIR, stored), x, y, { fit: [colW, 150], align: 'center' });
-      } catch { doc.font('Helvetica').fontSize(8).fillColor(mute).text('[image unreadable]', x, y); }
-      doc.font('Helvetica').fontSize(7.5).fillColor(mute).text(`${a.caption ? a.caption + ' — ' : ''}${fmt(a.uploaded_at)} · ${a.uploaded_by_name}`, x, y + 154, { width: colW });
+      } catch { doc.font(F.body).fontSize(8).fillColor(mute).text('[image unreadable]', x, y); }
+      doc.font(F.body).fontSize(7.5).fillColor(mute).text(`${a.caption ? a.caption + ' — ' : ''}${fmt(a.uploaded_at)} · ${a.uploaded_by_name}`, x, y + 154, { width: colW });
     });
     doc.y = y + 178; doc.x = 42; row.length = 0;
   };
@@ -149,13 +177,23 @@ export function buildPackage(shipmentId: number, out: Writable): Promise<void> {
 
   const chain = verifyChain();
   h2('Record integrity');
-  doc.font('Helvetica').fontSize(8.5).fillColor(ink).text(`Audit trail: ${chain.count} hash-chained entries system-wide — chain ${chain.ok ? 'VERIFIED INTACT' : 'BROKEN at entry #' + chain.brokenAt}. Each sign-off above is attributable to an individual login with PIN re-entry and server-time-stamped. Entries recorded offline show both the device time and the time received by the server.`);
+  doc.font(F.body).fontSize(8.5).fillColor(ink).text(`Audit trail: ${chain.count} hash-chained entries system-wide — chain ${chain.ok ? 'VERIFIED INTACT' : 'BROKEN at entry #' + chain.brokenAt}. Each sign-off above is attributable to an individual login with PIN re-entry and server-time-stamped. Entries recorded offline show both the device time and the time received by the server.`);
 
   const range = doc.bufferedPageRange();
   for (let i = range.start; i < range.start + range.count; i++) {
     doc.switchToPage(i);
-    doc.page.margins.bottom = 0;
-    doc.font('Helvetica').fontSize(7.5).fillColor(mute).text(`${s.shipment_no} · ${s.customer} · Quality Release Package          Page ${i + 1} of ${range.count}`, 42, doc.page.height - 34, { width: W, align: 'center', lineBreak: false });
+    doc.page.margins.bottom = 0; doc.page.margins.top = 0;
+    if (i > range.start) { // running header on continuation pages
+      if (branded) { try { doc.image(BRAND.logo, 42, 12, { fit: [24, 24] }); } catch { /* ignore */ } }
+      doc.font(F.semi).fontSize(8).fillColor(navy).text(`${BRAND.name}  ·  Quality Release Package`, branded ? 72 : 42, 19, { lineBreak: false });
+      doc.font(F.semi).fontSize(8).fillColor(mute).text(`${s.shipment_no}  ·  ${s.customer}`, 42, 19, { width: W, align: 'right', lineBreak: false });
+      doc.moveTo(42, 40).lineTo(42 + W, 40).lineWidth(0.6).strokeColor(line).stroke();
+      doc.moveTo(42, 40).lineTo(42 + 34, 40).lineWidth(2).strokeColor(magenta).stroke(); doc.lineWidth(1);
+    }
+    const fy = doc.page.height - 40;
+    doc.moveTo(42, fy - 6).lineTo(42 + W, fy - 6).lineWidth(0.6).strokeColor(line).stroke();
+    doc.font(F.body).fontSize(7).fillColor(mute).text(`${BRAND.name}  ·  ${BRAND.address}  ·  ${BRAND.phone}  ·  ${BRAND.web}`, 42, fy, { width: W, align: 'center', lineBreak: false });
+    doc.font(F.semi).fontSize(7.5).fillColor(navy).text(`${s.shipment_no}  ·  ${s.customer}  ·  Page ${i + 1} of ${range.count}`, 42, fy + 11, { width: W, align: 'center', lineBreak: false });
   }
   const done = new Promise<void>((resolve, reject) => { out.on('finish', resolve); out.on('error', reject); });
   doc.end();
@@ -169,7 +207,7 @@ function table(doc: PDFKit.PDFDocument, W: number, cols: [string, number][], row
   const draw = (cells: string[], bold: boolean) => {
     const y = doc.y;
     let h = 0;
-    doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(8);
+    doc.font(bold ? F.bold : F.body).fontSize(8);
     cells.forEach((t, i) => { h = Math.max(h, doc.heightOfString(t, { width: widths[i] - 4 })); });
     ensure(h + 6);
     const yy = doc.y; let x = 42;

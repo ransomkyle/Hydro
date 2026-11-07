@@ -30,7 +30,8 @@ Develop: `npm run dev` (API on :4100, UI on :5174). Tests: `npm test` (15 integr
 | `PORT` | `4100` | listen port |
 | `QC_DATA_DIR` | `./data` | database, uploads, secret |
 | `SHOP_TZ` | `America/Chicago` | timezone printed on the PDF |
-| `COMPANY_NAME` | generic | header on the PDF |
+| `COMPANY_NAME` | `DAD Manufacturing, Inc.` | name on the PDF |
+| `COMPANY_ADDRESS` / `COMPANY_PHONE` / `COMPANY_WEB` | DAD Hiawatha HQ | contact line on the PDF header and footer |
 | `QC_TLS_CERT` / `QC_TLS_KEY` | – | enable HTTPS directly |
 | `NOTIFY_WEBHOOK_URL` | – | POSTs `{text,kind,shipmentId}` for flags/overrides (Teams/Slack/email gateway) |
 | `TOKEN_TTL_HOURS` | `12` | login lifetime |
@@ -49,6 +50,9 @@ Develop: `npm run dev` (API on :4100, UI on :5174). Tests: `npm test` (15 integr
 **Offline:** sign-offs, verifications, materials, events and photos made with no network are saved on the device with their original time and a unique id, then replay automatically (exactly once). Offline PINs are never stored or sent: the device checks the PIN against a verifier and signs the action with an HMAC derived from the PIN; the server re-verifies it on sync. Entries show both the device time and the server-receipt time and are labeled "offline" everywhere. Device clocks that are in the future or >14 days old are rejected.
 
 **Audit trail:** every change is written to an append-only, hash-chained log (DB triggers refuse edit/delete; *Audit & reports → Verify chain* detects tampering). Filter, export CSV, and include it in audits.
+
+## Branding (DAD Manufacturing)
+Logo, colors and fonts come from dadmfg.com: navy `#002E5D`, magenta `#ED1566` accent, light blue `#83B7E6`; Raleway headings and Open Sans body (open-source, bundled so nothing loads from a CDN). The same identity is used in the app (header, login, installed-app icon) and the PDF release package (navy header band with logo, tagline, address, ISO line, running header and footer on every page). Brand constants live in `server/src/brand.ts` (PDF) and the top of `web/src/styles.css` (app); the logo files are `server/assets/dad-logo.png` and `web/public/dad-logo.png`. The ISO line reads "built to ISO 9001:2015 standards", matching the website wording (not "certified"). Font licenses (OFL) are included next to the font files.
 
 ## Not built yet (ask if you want them)
 ERP/CSV import of jobs (data model is ready), email (webhook only), barcode/QR scanning, per-customer portals, HEIC photos in the PDF (stored fine, shown only as files), multi-plant support, MFA beyond PIN.

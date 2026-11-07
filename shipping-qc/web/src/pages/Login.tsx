@@ -9,7 +9,7 @@ export default function Login() {
   return (
     <div className="login">
       <div className="card stack">
-        <div><h1>Shipping QC</h1><div className="muted">Sign in to release shipments and sign off checks.</div></div>
+        <div className="login-brand"><img src="/dad-logo.png" alt="DAD Manufacturing" /><h1 style={{ marginTop: 6 }}>DAD Manufacturing</h1><div className="tag">Diversified · Accurate · Dependable</div><div className="muted" style={{ marginTop: 10 }}>Shipping QC — sign in to release shipments and sign off checks.</div></div>
         <form className="stack" onSubmit={async e => {
           e.preventDefault(); setBusy(true); setErr(null);
           try { await login(u.trim(), p); } catch (x: any) { setErr(x instanceof NetworkError ? 'Cannot reach the server. You must sign in at least once while online.' : x.message); } finally { setBusy(false); }

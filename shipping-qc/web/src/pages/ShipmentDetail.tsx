@@ -35,7 +35,7 @@ export default function ShipmentDetail() {
       {stale && <div className="note warn">Offline — showing the last copy saved on this device. Your actions are still recorded and will sync.</div>}
       <section className="card stack">
         <div className="row">
-          <div className="grow"><div className="row"><h1 style={{ margin: 0 }}>{s.shipment_no}</h1><Badge kind={s.status} />{s.release_override_reason && <Badge kind="major">released with override</Badge>}{open > 0 && <Badge kind="critical">⚑ {open} open flag{open > 1 ? 's' : ''}</Badge>}</div>
+          <div className="grow"><div className="row"><h1 className="nowrap" style={{ margin: 0 }}>{s.shipment_no}</h1><Badge kind={s.status} />{s.release_override_reason && <Badge kind="major">released with override</Badge>}{open > 0 && <Badge kind="critical">⚑ {open} open flag{open > 1 ? 's' : ''}</Badge>}</div>
             <div><b>{s.customer}</b> · Job {s.job_no}{s.po_no ? ` · PO ${s.po_no}` : ''}</div>
             {s.description && <div className="muted">{s.description}</div>}</div>
           <div className="row">
