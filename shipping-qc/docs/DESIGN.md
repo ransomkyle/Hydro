@@ -34,6 +34,12 @@ These are **starting points**. Your customer PO/spec and your quality manual alw
 4. US units (inches, pounds), US timezone default, English only.
 5. Starter checklist wording is my best-practice default, **not reviewed against your quality manual or customer requirements** — have your QC manager review and edit each template before first use.
 
+## Update: gaps closed since v1
+Plants, gauge register, CAPA, template approval, KPI reports, CSV import, labels/QR/scanning, email, backup/verify/restore, persistent lockouts, session revocation, password policy, CSP, CI. Remaining gaps are listed in `docs/SECURITY.md` and the README’s “Not built yet”.
+
+## Benchmarking notes (from vendor/review sites, not hands-on tests)
+ProShop ERP, Fulcrum, JobBOSS², FabSuite and Qualityze cover broad shop ERP/QMS; ETQ Reliance, MasterControl and Qualio cover eQMS (document control, CAPA, Part 11). This app is deliberately the *shipping-release* layer — per-job signed checklists, custody, offline, branded package — and can sit beside any of them. Importing jobs from CSV is the integration point today.
+
 ## Known limitations
 * Offline PINs need a prior online login on that device (to receive the PIN salt/verifier) and HTTPS.
 * Photos are shown in the PDF only if JPEG/PNG (phone photos are converted to JPEG on upload; HEIC is stored but not embedded).

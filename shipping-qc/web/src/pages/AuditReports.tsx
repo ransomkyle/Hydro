@@ -8,7 +8,7 @@ import { summarize } from './shipment/HistoryTab';
 export default function AuditReports() {
   const toast = useToast();
   const [rows, setRows] = useState<any[]>([]); const [f, setF] = useState({ user: '', action: '', from: '', to: '', offline: '' });
-  const [chain, setChain] = useState<any>(null); const [heat, setHeat] = useState(''); const [cust, setCust] = useState('');
+  const [chain, setChain] = useState<any>(null); const [anchor, setAnchor] = useState<any>(null); const [heat, setHeat] = useState(''); const [cust, setCust] = useState('');
   const qs = () => new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString();
   const load = () => get<any[]>('/audit?' + qs()).then(r => setRows(r.data)).catch(e => toast(e.message, 'bad'));
   useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
@@ -34,6 +34,8 @@ export default function AuditReports() {
         <div className="row"><h2 style={{ margin: 0 }}>Tamper check</h2>
           <button className="btn sm" onClick={() => get('/audit/verify').then(r => setChain(r.data))}>Verify audit chain</button>
           {chain && (chain.ok ? <Badge kind="released">✔ {chain.count} entries intact</Badge> : <Badge kind="critical">✖ chain broken at entry #{chain.brokenAt}</Badge>)}</div>
+        <div className="row"><button className="btn sm" onClick={() => get('/audit/anchor').then(r => setAnchor(r.data))}>Show audit anchor</button>{anchor && <span className="mono small" style={{ wordBreak: 'break-all' }}>{anchor.entries} entries · {anchor.lastHash} · {new Date(anchor.generatedAt).toLocaleString()}</span>}</div>
+        {anchor && <div className="muted small">Print or email this line weekly and keep it somewhere independent of the server. If someone ever rewrites history, the chain will no longer match the anchors you saved.</div>}
         <div className="muted small">Each audit entry includes a hash of the one before it, and the database refuses edits and deletes, so any alteration is detectable.</div>
       </section>
       <section className="card flush">

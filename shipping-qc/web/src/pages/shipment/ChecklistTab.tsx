@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Badge, ErrorBox, Modal, PinField, shrinkImage, AuthImage } from '../../components/ui';
 import { ApiError, del, get, post, patch } from '../../lib/api';
+import { useEffect } from 'react';
 import { fmtDT } from '../../lib/format';
 import { sendOrQueue, signItem } from '../../lib/outbox';
 import { type TabProps, isQC } from './types';
@@ -59,7 +60,7 @@ export default function ChecklistTab(p: TabProps) {
                   </div>)}
                 {i.status !== 'pending' && (
                   <div className="sig">
-                    {i.value && <div><b>Recorded:</b> {i.value}{i.unit ? ' ' + i.unit : ''}</div>}
+                    {i.value && <div><b>Recorded:</b> {i.value}{i.unit ? ' ' + i.unit : ''}{i.gauge_no ? <span className="muted"> · gauge {i.gauge_no}</span> : null}</div>}
                     {i.note && <div><b>{i.status === 'fail' ? 'Failure:' : 'Note:'}</b> {i.note}</div>}
                     <div>✔ <b>{i.done_by_name}</b> — {fmtDT(i.done_at)} {i.done_offline ? <span className="off">· recorded offline{i._pending ? ' (waiting to sync)' : ''}</span> : null}</div>
                     {!!i.needs_verification && i.status === 'pass' && (i.verified_by_name
@@ -117,14 +118,16 @@ function FileAdder({ item, p, kind }: { item: any; p: TabProps; kind: 'photo' | 
 
 function SignDialog({ item, atts, pendingAtt, p, onClose }: { item: any; atts: any[]; pendingAtt: number; p: TabProps; onClose: () => void }) {
   const [result, setResult] = useState<'pass' | 'fail' | 'na'>('pass');
-  const [value, setValue] = useState(''); const [note, setNote] = useState(''); const [pin, setPin] = useState('');
+  const [value, setValue] = useState(''); const [note, setNote] = useState(''); const [pin, setPin] = useState(''); const [gauge, setGauge] = useState('');
+  const [gauges, setGauges] = useState<any[]>([]);
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  useEffect(() => { if (item.kind === 'value') get<any[]>('/gauges').then(r => setGauges(r.data.filter(g => g.status === 'active'))).catch(() => {}); }, [item.kind]);
   const needsFile = (item.kind === 'photo' || item.kind === 'doc') && result === 'pass';
   const haveFile = atts.length + pendingAtt > 0;
   const submit = async () => {
     setBusy(true); setErr(null);
     try {
-      const r = await signItem(p.ctx, { action: 'sign', shipmentId: p.d.shipment.id, itemId: item.id, itemText: item.text, result, value, note, pin });
+      const r = await signItem(p.ctx, { action: 'sign', shipmentId: p.d.shipment.id, itemId: item.id, itemText: item.text, result, value, note, gauge: gauge || undefined, pin });
       if (r.queued) p.toast('Offline — signed on this device with the current time. It will sync automatically.', 'warn'); else { p.setDetail(r.data); if (result === 'fail') p.toast('Failed item flagged — QC has been notified', 'warn'); else p.toast('Signed ✔', 'ok'); }
       onClose();
     } catch (e: any) { setErr(e instanceof ApiError ? e.message : e.message); setBusy(false); }
@@ -134,6 +137,10 @@ function SignDialog({ item, atts, pendingAtt, p, onClose }: { item: any; atts: a
       <div><b>{item.text}</b>{item.spec && <div className="muted small">{item.spec}</div>}</div>
       <div className="seg">{(['pass', 'fail', 'na'] as const).map(r => <button key={r} type="button" className={`${r} ${result === r ? 'on' : ''}`} onClick={() => setResult(r)}>{r === 'na' ? 'N/A' : r.toUpperCase()}</button>)}</div>
       {item.kind === 'value' && result === 'pass' && <label className="f">Recorded value{item.unit ? ` (${item.unit})` : ''} *<input type="text" value={value} onChange={e => setValue(e.target.value)} autoFocus /></label>}
+      {item.kind === 'value' && result === 'pass' && gauges.length > 0 && (
+        <label className="f">Gauge / instrument used (optional)
+          <select value={gauge} onChange={e => setGauge(e.target.value)}><option value="">— none recorded —</option>
+            {gauges.map(g => <option key={g.id} value={g.gauge_no} disabled={g.overdue}>{g.gauge_no} — {g.description}{g.overdue ? ' (OUT OF CALIBRATION)' : g.due_soon ? ` (cal due ${g.cal_due})` : ''}</option>)}</select></label>)}
       {needsFile && <div className="note">{haveFile ? `✔ ${atts.length + pendingAtt} file(s) attached` : `This item needs ${item.kind === 'photo' ? 'a photo' : 'a document'} before it can pass.`}<div style={{ marginTop: 8 }}><FileAdder item={item} p={p} kind={item.kind} /></div></div>}
       {(result !== 'pass' || item.kind !== 'check') && <label className="f">{result === 'fail' ? 'What failed? *' : result === 'na' ? 'Why is this N/A? *' : 'Note (optional)'}<textarea value={note} onChange={e => setNote(e.target.value)} /></label>}
       {result === 'fail' && <div className="note warn">A failure raises a flag and notifies the QC team. It does not block you from continuing.</div>}

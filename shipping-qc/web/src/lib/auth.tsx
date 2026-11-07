@@ -2,12 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { ApiError, NetworkError, get, post, setToken, setUnauthorizedHandler, getToken } from './api';
 import { countPending, onOutboxChange, syncOutbox } from './outbox';
 
-export interface Me { id: number; username: string; name: string; role: string; hasPin: boolean }
+export interface Me { id: number; username: string; name: string; role: string; hasPin: boolean; email?: string | null; mustChange?: boolean }
 interface Session { user: Me; pinSalt?: string; pinVerifier?: string }
 interface AuthCtx {
   user: Me | null; pinSalt?: string; pinVerifier?: string;
   online: boolean; pending: number; sessionExpired: boolean;
-  login(u: string, p: string): Promise<void>; logout(): void; refreshMe(): Promise<void>; syncNow(): Promise<void>;
+  login(u: string, p: string): Promise<void>; logout(): void; adopt(r: { token?: string; user: Me; pinSalt?: string; pinVerifier?: string }): void; refreshMe(): Promise<void>; syncNow(): Promise<void>;
   can(...roles: string[]): boolean;
 }
 const Ctx = createContext<AuthCtx>(null as any);
@@ -61,10 +61,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     save(s); setSession(s); setExpired(false);
   }, []);
 
+  /** Take over a fresh server response (e.g. after a password change, which revokes the old token). */
+  const adopt = useCallback((r: { token?: string; user: Me; pinSalt?: string; pinVerifier?: string }) => {
+    if (r.token) setToken(r.token);
+    const s = { user: r.user, pinSalt: r.pinSalt, pinVerifier: r.pinVerifier };
+    save(s); setSession(s); setExpired(false);
+  }, []);
+
   const value = useMemo<AuthCtx>(() => ({
     user: session?.user ?? null, pinSalt: session?.pinSalt, pinVerifier: session?.pinVerifier, online, pending, sessionExpired,
-    login, logout, refreshMe, syncNow, can: (...roles) => !!session && roles.includes(session.user.role),
-  }), [session, online, pending, sessionExpired, login, logout, refreshMe, syncNow]);
+    login, logout, adopt, refreshMe, syncNow, can: (...roles) => !!session && roles.includes(session.user.role),
+  }), [session, online, pending, sessionExpired, login, logout, adopt, refreshMe, syncNow]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 export { NetworkError };

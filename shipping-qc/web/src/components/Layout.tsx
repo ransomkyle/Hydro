@@ -28,15 +28,17 @@ export default function Layout() {
             <NavLink to="/shipments">Shipments</NavLink>
             {can('shipping', 'inspector', 'manager', 'admin') && <NavLink to="/shipments/new">+ New</NavLink>}
             <NavLink to="/templates">Checklists</NavLink>
-            {qc && <NavLink to="/audit">Audit & Reports</NavLink>}
+            {qc && <NavLink to="/reports">Reports</NavLink>}
+            <NavLink to="/capa">CAPA</NavLink>
+            <NavLink to="/gauges">Gauges</NavLink>
+            {qc && <NavLink to="/audit">Audit</NavLink>}
             {can('admin') && <NavLink to="/users">Users</NavLink>}
           </nav>
-          <span className="right" />
           {!online ? <span className="pill offline" title="Actions are saved on this device and sync when the network returns">● Offline{pending ? ` · ${pending} queued` : ''}</span>
             : pending ? <button className="pill sync" onClick={syncNow} title="Tap to sync now">⟳ {pending} to sync</button>
             : <span className="pill online hide-sm">● Online</span>}
           <Link to="/notifications" className="bell" aria-label="Notifications">🔔{unread > 0 && <b>{unread}</b>}</Link>
-          <Link to="/account" className="bell hide-sm" title={ROLE_LABEL[user!.role]} style={{ fontSize: '.85rem' }}>{user!.name}</Link>
+          <Link to="/account" className="bell hide-md" title={ROLE_LABEL[user!.role]} style={{ fontSize: '.85rem' }}>{user!.name}</Link>
           <button className="bell" style={{ background: 'none', border: 0, cursor: 'pointer' }} onClick={() => { logout(); nav('/'); }} aria-label="Sign out">⎋</button>
         </div>
       </header>

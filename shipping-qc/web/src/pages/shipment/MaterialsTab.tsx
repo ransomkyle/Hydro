@@ -3,6 +3,7 @@ import { Badge, ErrorBox, Modal } from '../../components/ui';
 import { post } from '../../lib/api';
 import { CATEGORY_LABEL, fmtDT } from '../../lib/format';
 import { sendOrQueue } from '../../lib/outbox';
+import { ScanButton } from '../../components/Scanner';
 import { type TabProps, isQC } from './types';
 
 const SUGGEST: Record<string, string[]> = {
@@ -37,7 +38,7 @@ export default function MaterialsTab(p: TabProps) {
             <label className="f">Material *<input type="text" list="matnames" required value={f.name} onChange={e => set('name', e.target.value)} /></label>
             <datalist id="matnames">{SUGGEST[f.category].map(x => <option key={x} value={x} />)}</datalist>
             <label className="f">Grade / alloy<input type="text" value={f.grade} onChange={e => set('grade', e.target.value)} placeholder="316L" /></label>
-            <label className="f">Heat / lot # {f.category === 'base_metal' ? '*' : ''}<input type="text" required={f.category === 'base_metal'} value={f.heat_lot} onChange={e => set('heat_lot', e.target.value)} /></label>
+            <label className="f">Heat / lot # {f.category === 'base_metal' ? '*' : ''}<span style={{ display: 'flex', gap: 6 }}><input type="text" required={f.category === 'base_metal'} value={f.heat_lot} onChange={e => set('heat_lot', e.target.value)} /><ScanButton label="📷" onScan={v => set('heat_lot', v)} /></span></label>
             <label className="f">Spec<input type="text" value={f.spec} onChange={e => set('spec', e.target.value)} placeholder="ASTM A240 / AWS A5.9" /></label>
             <div className="grid g2"><label className="f">Qty<input type="number" min="0" step="any" value={f.qty} onChange={e => set('qty', e.target.value)} /></label><label className="f">Unit<input type="text" value={f.unit} onChange={e => set('unit', e.target.value)} placeholder="lb, ft, ea" /></label></div>
           </div>

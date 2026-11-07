@@ -18,8 +18,8 @@ export async function checkPinLocally(pin: string, saltHex: string, verifierHex:
   return hex(await crypto.subtle.digest('SHA-256', await deriveKey(pin, saltHex))) === verifierHex;
 }
 
-export const canonical = (action: string, itemId: number, b: { opId?: string; result?: string; value?: string; note?: string; clientAt?: string }) =>
-  [b.opId ?? '', action, itemId, b.result ?? '', b.value ?? '', b.note ?? '', b.clientAt ?? ''].join('|');
+export const canonical = (action: string, itemId: number, b: { opId?: string; result?: string; value?: string; note?: string; clientAt?: string; gauge?: string }) =>
+  [b.opId ?? '', action, itemId, b.result ?? '', b.value ?? '', b.note ?? '', b.clientAt ?? '', b.gauge ?? ''].join('|');
 
 export async function makeProof(pin: string, saltHex: string, canon: string): Promise<string> {
   const key = await crypto.subtle.importKey('raw', await deriveKey(pin, saltHex), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);

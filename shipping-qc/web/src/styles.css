@@ -27,8 +27,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .brand img { width: 40px; height: 40px; display: block; }
 .brand b { font-family: 'Raleway', sans-serif; font-weight: 700; font-size: 1.05rem; line-height: 1.05; display: block; }
 .brand small { display: block; font-size: .64rem; letter-spacing: .14em; text-transform: uppercase; color: var(--brand-sky); font-weight: 600; line-height: 1.1; }
-.nav { display: flex; gap: .15rem; overflow-x: auto; scrollbar-width: none; }
-.nav a { color: #b9c7d4; padding: .55rem .8rem; border-radius: 8px; white-space: nowrap; text-decoration: none; min-height: 40px; display: flex; align-items: center; }
+.nav { display: flex; gap: .1rem; overflow-x: auto; scrollbar-width: none; flex: 1 1 0; min-width: 0; }
+.nav a { color: #b9c7d4; padding: .55rem .65rem; border-radius: 8px; white-space: nowrap; text-decoration: none; min-height: 40px; display: flex; align-items: center; }
 .nav a:hover { background: var(--steel-2); color: #fff; } .nav a.active { background: var(--steel-2); color: #fff; box-shadow: inset 0 -3px 0 var(--brand-pink); }
 .pill { display: inline-flex; align-items: center; gap: .35rem; padding: .25rem .65rem; border-radius: 999px; font-size: .8rem; font-weight: 600; border: 1px solid transparent; white-space: nowrap; }
 .pill.online { background: #123a28; color: #8be0b0; } .pill.offline { background: #4a2d0a; color: #ffd08a; } .pill.sync { background: #1d3a58; color: #a9d2ff; cursor: pointer; }
@@ -109,6 +109,7 @@ input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); }
 .hl { background: #fff7d6; }
 .ready-box { border-left: 6px solid var(--warn); } .ready-box.ok { border-left-color: var(--ok); }
 ul.clean { margin: 0; padding-left: 1.1rem; } ul.clean li { margin: .15rem 0; }
+@media (max-width: 1320px) { .hide-md { display: none !important; } }
 @media (max-width: 720px) {
   .nav a { padding: .5rem .6rem; } .main { padding: .8rem .7rem 5rem; } .hide-sm { display: none !important; } .brand span { display: none; }
   .tbl th, .tbl td { padding: .5rem .5rem; }

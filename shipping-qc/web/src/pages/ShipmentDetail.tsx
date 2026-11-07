@@ -36,10 +36,11 @@ export default function ShipmentDetail() {
       <section className="card stack">
         <div className="row">
           <div className="grow"><div className="row"><h1 className="nowrap" style={{ margin: 0 }}>{s.shipment_no}</h1><Badge kind={s.status} />{s.release_override_reason && <Badge kind="major">released with override</Badge>}{open > 0 && <Badge kind="critical">⚑ {open} open flag{open > 1 ? 's' : ''}</Badge>}</div>
-            <div><b>{s.customer}</b> · Job {s.job_no}{s.po_no ? ` · PO ${s.po_no}` : ''}</div>
+            <div><b>{s.customer}</b> · Job {s.job_no}{s.po_no ? ` · PO ${s.po_no}` : ''}{s.plant ? ` · ${s.plant}` : ''}</div>
             {s.description && <div className="muted">{s.description}</div>}</div>
           <div className="row">
             <button className="btn" disabled={!online} onClick={() => download(`/shipments/${id}/package.pdf`, undefined, true).catch(e => toast(e.message, 'bad'))}>📄 Release package (PDF)</button>
+            <button className="btn" disabled={!online} onClick={() => download(`/shipments/${id}/label.pdf`, undefined, true).catch(e => toast(e.message, 'bad'))}>🏷 Label (QR)</button>
             {can('manager') && !locked && <button className="btn ok" onClick={() => setDlg('release')}>Release for shipment…</button>}
             {can('manager') && (s.status === 'released' || s.status === 'shipped') && <button className="btn" onClick={() => setDlg('reopen')}>Reopen…</button>}
             {can('manager') && !['shipped', 'delivered', 'cancelled'].includes(s.status) && <button className="btn ghost" onClick={() => setDlg('cancel')}>Cancel shipment</button>}

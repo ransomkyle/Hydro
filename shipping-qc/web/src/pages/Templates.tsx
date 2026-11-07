@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Badge, ErrorBox, useToast } from '../components/ui';
+import { Badge, ErrorBox, Modal, PinField, useToast } from '../components/ui';
 import { get, post, put } from '../lib/api';
 import { useAuth } from '../lib/auth';
 
@@ -8,7 +8,7 @@ export function TemplateList() {
   const { can } = useAuth(); const [rows, setRows] = useState<any[]>([]); const [all, setAll] = useState(false); const toast = useToast();
   const load = () => get<any[]>('/templates' + (all ? '?all=1' : '')).then(r => setRows(r.data));
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [all]);
-  const mayEdit = can('manager', 'admin');
+  const mayEdit = can('manager', 'admin'); const [appr, setAppr] = useState<any>(null); const [pin, setPin] = useState(''); const [aerr, setAerr] = useState<string | null>(null);
   return (
     <div className="stack">
       <div className="row"><h1>Checklist library</h1>{mayEdit && <Link to="/templates/new" className="btn primary right">+ New template</Link>}</div>
@@ -20,10 +20,18 @@ export function TemplateList() {
             <div className="row"><b>{t.name}</b><Badge kind={t.category === 'base' ? 'released' : t.category === 'customer' ? 'shipped' : 'pending'}>{t.category}</Badge>{!t.active && <Badge kind="cancelled">archived</Badge>}</div>
             <div className="muted small">{t.description}</div>
             <div className="small">{t.item_count} items · v{t.version}{t.customer ? ` · ${t.customer}` : ''}</div>
+            <div className="small">{t.approved_at ? <span style={{ color: 'var(--ok)' }}>✔ Approved by {t.approved_by_name} · {new Date(t.approved_at).toLocaleDateString()}</span> : <span style={{ color: 'var(--warn)' }}>⚠ Not approved by a QC manager yet</span>}</div>
             <div className="row"><Link className="btn sm" to={`/templates/${t.id}`}>{mayEdit ? 'View / edit' : 'View'}</Link>
+              {can('manager') && !t.approved_at && <button className="btn sm ok" onClick={() => { setAppr(t); setPin(''); setAerr(null); }}>Approve…</button>}
               {mayEdit && <button className="btn sm ghost" onClick={async () => { await post(`/templates/${t.id}/archive`, { active: !t.active }); toast(t.active ? 'Archived' : 'Restored', 'ok'); load(); }}>{t.active ? 'Archive' : 'Restore'}</button>}</div>
           </div>))}
       </div>
+      {appr && (
+        <Modal title={`Approve “${appr.name}” (v${appr.version})`} onClose={() => setAppr(null)}>
+          <div className="muted small">By approving you confirm you have reviewed every item against the quality manual and customer requirements. Any later edit clears approval.</div>
+          <PinField value={pin} onChange={setPin} label="QC manager PIN" /><ErrorBox error={aerr} />
+          <button className="btn ok big" disabled={pin.length < 4} onClick={async () => { try { await post(`/templates/${appr.id}/approve`, { pin }); toast('Template approved', 'ok'); setAppr(null); load(); } catch (e: any) { setAerr(e.message); } }}>Sign & approve</button>
+        </Modal>)}
     </div>
   );
 }

@@ -24,7 +24,8 @@ export function Notifications() {
 }
 
 export function Account() {
-  const { user, refreshMe, pending, online, syncNow, logout } = useAuth(); const toast = useToast();
+  const { user, refreshMe, pending, online, syncNow, logout, adopt } = useAuth(); const toast = useToast();
+  const [email, setEmail] = useState(user!.email ?? ''); const [eerr, setEerr] = useState<string | null>(null);
   const [pw, setPw] = useState(''); const [pin, setPin] = useState(''); const [pin2, setPin2] = useState(''); const [err, setErr] = useState<string | null>(null);
   const [cur, setCur] = useState(''); const [next, setNext] = useState(''); const [perr, setPerr] = useState<string | null>(null);
   const [ops, setOps] = useState<Op[]>([]);
@@ -44,10 +45,18 @@ export function Account() {
         <div><button className="btn primary" disabled={!pw || pin.length < 4 || pin !== pin2} onClick={async () => { setErr(null); try { await post('/auth/pin', { password: pw, pin }); toast('PIN saved', 'ok'); setPw(''); setPin(''); setPin2(''); refreshMe(); } catch (e: any) { setErr(e.message); } }}>Save PIN</button></div>
       </section>
       <section className="card stack">
+        <h2>Email for alerts</h2>
+        <div className="muted small">Flags, failed items, overrides, and CAPAs assigned to you are emailed here (if the server has email set up).</div>
+        <label className="f">Email address<input type="text" inputMode="email" autoCapitalize="none" value={email} onChange={e => setEmail(e.target.value)} /></label>
+        <ErrorBox error={eerr} />
+        <div><button className="btn" onClick={async () => { setEerr(null); try { await post('/auth/email', { email: email.trim() }); toast('Email saved', 'ok'); refreshMe(); } catch (e: any) { setEerr(e.message); } }}>Save email</button></div>
+      </section>
+      <section className="card stack">
         <h2>Change password</h2>
-        <div className="grid g2"><label className="f">Current<input type="password" value={cur} onChange={e => setCur(e.target.value)} /></label><label className="f">New (min 8)<input type="password" value={next} onChange={e => setNext(e.target.value)} /></label></div>
+        <div className="muted small">At least 10 characters, not a common password, not containing your username. Changing it signs you out of other devices.</div>
+        <div className="grid g2"><label className="f">Current<input type="password" value={cur} onChange={e => setCur(e.target.value)} /></label><label className="f">New (min 10)<input type="password" value={next} onChange={e => setNext(e.target.value)} /></label></div>
         <ErrorBox error={perr} />
-        <div><button className="btn" disabled={!cur || next.length < 8} onClick={async () => { setPerr(null); try { await post('/auth/password', { current: cur, next }); toast('Password changed', 'ok'); setCur(''); setNext(''); } catch (e: any) { setPerr(e.message); } }}>Change password</button></div>
+        <div><button className="btn" disabled={!cur || next.length < 10} onClick={async () => { setPerr(null); try { const r = await post('/auth/password', { current: cur, next }); adopt({ token: r.token, user: r.user, pinSalt: r.pinSalt, pinVerifier: r.pinVerifier }); toast('Password changed', 'ok'); setCur(''); setNext(''); } catch (e: any) { setPerr(e.message); } }}>Change password</button></div>
       </section>
       <section className="card stack">
         <div className="row"><h2 style={{ margin: 0 }}>Saved on this device (offline queue)</h2>{pending > 0 && online && <button className="btn sm" onClick={syncNow}>Sync now</button>}</div>

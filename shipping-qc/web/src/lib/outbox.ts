@@ -46,9 +46,9 @@ async function trySend(op: Op): Promise<any> {
 }
 
 /** Sign (pass/fail/na) or verify an item. The PIN is used here and discarded — only a proof is ever queued. */
-export async function signItem(ctx: Ctx, args: { action: 'sign' | 'verify'; shipmentId: number; itemId: number; itemText: string; result?: string; value?: string; note?: string; pin: string }): Promise<SendResult> {
+export async function signItem(ctx: Ctx, args: { action: 'sign' | 'verify'; shipmentId: number; itemId: number; itemText: string; result?: string; value?: string; note?: string; gauge?: string; pin: string }): Promise<SendResult> {
   const opId = uuid(); const clientAt = new Date().toISOString();
-  const fields = { opId, result: args.result, value: args.value || undefined, note: args.note || undefined, clientAt };
+  const fields = { opId, result: args.result, value: args.value || undefined, note: args.note || undefined, gauge: args.gauge || undefined, clientAt };
   const path = `/shipments/items/${args.itemId}/${args.action}`;
   const label = `${args.action === 'verify' ? 'Verify' : (args.result ?? 'sign').toUpperCase()}: ${args.itemText}`;
   try {

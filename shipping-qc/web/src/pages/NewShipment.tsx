@@ -3,15 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { ErrorBox } from '../components/ui';
 import { get, post } from '../lib/api';
 import { SIZE_RULES, classify, fromLocalInput } from '../lib/format';
+import { useMeta } from '../lib/useMeta';
 
 const blankPart = () => ({ part_no: '', description: '', qty: '1', grade: '316L', heat_no: '' });
 const n = (v: string) => (v.trim() === '' ? null : Number(v));
 
 export default function NewShipment() {
-  const nav = useNavigate();
+  const nav = useNavigate(); const meta = useMeta();
   const [templates, setTemplates] = useState<any[]>([]);
   const [f, setF] = useState<Record<string, any>>({ job_no: '', customer: '', po_no: '', description: '', special_requirements: '', length_in: '', width_in: '', height_in: '', weight_lb: '', pieces: '',
-    ship_from_dock: '', ship_to_name: '', ship_to_address: '', requested_ship_date: '', pickup_appt: '', carrier: '', is_sanitary: false, is_pressure: false, size_class: '' });
+    plant: '', ship_from_dock: '', ship_to_name: '', ship_to_address: '', requested_ship_date: '', pickup_appt: '', carrier: '', is_sanitary: false, is_pressure: false, size_class: '' });
   const [parts, setParts] = useState([blankPart()]);
   const [picked, setPicked] = useState<Set<number> | null>(null);
   const [err, setErr] = useState<string | null>(null); const [busy, setBusy] = useState(false);
@@ -43,6 +44,7 @@ export default function NewShipment() {
       const body: any = { ...f, size_class: sizeClass, length_in: n(f.length_in), width_in: n(f.width_in), height_in: n(f.height_in), weight_lb: n(f.weight_lb), pieces: n(f.pieces),
         requested_ship_date: f.requested_ship_date || null, pickup_appt: fromLocalInput(f.pickup_appt), templateIds: [...chosen],
         parts: parts.filter(p => p.part_no || p.description).map(p => ({ ...p, qty: Number(p.qty) || 1 })) };
+      body.plant = f.plant || meta.plants[0] || null;
       for (const k of ['po_no', 'description', 'special_requirements', 'ship_from_dock', 'ship_to_name', 'ship_to_address', 'carrier']) if (body[k] === '') body[k] = null;
       const r = await post('/shipments', body);
       nav(`/shipments/${r.shipment.id}`);
@@ -86,7 +88,7 @@ export default function NewShipment() {
             return (
               <label key={t.id} className={`card check ${chosen.has(t.id) ? 'hl' : ''}`} style={{ alignItems: 'flex-start', cursor: 'pointer', borderColor: chosen.has(t.id) ? 'var(--accent)' : undefined }}>
                 <input type="checkbox" checked={chosen.has(t.id)} onChange={() => toggle(t.id)} style={{ marginTop: 3 }} />
-                <span><b>{t.name}</b>{match && <span className="badge b-released" style={{ marginLeft: 6 }}>matches customer</span>}<br />
+                <span><b>{t.name}</b>{match && <span className="badge b-released" style={{ marginLeft: 6 }}>matches customer</span>}{!t.approved_at && <span className="badge b-major" style={{ marginLeft: 6 }} title={meta.requireApprovedTemplates ? 'Cannot be used until a QC manager approves it' : 'A QC manager has not approved this version yet'}>{meta.requireApprovedTemplates ? 'needs approval — blocked' : 'not yet approved'}</span>}<br />
                   <span className="muted small">{t.item_count} items{t.customer ? ` · ${t.customer}` : ''}{t.description ? ' — ' + t.description : ''}</span></span>
               </label>);
           })}
@@ -112,6 +114,7 @@ export default function NewShipment() {
       <section className="card stack">
         <h2>Pickup & destination</h2>
         <div className="grid g3">
+          {meta.plants.length > 0 && <label className="f">Plant<select value={f.plant || meta.plants[0]} onChange={e => set('plant', e.target.value)}>{meta.plants.map(p => <option key={p}>{p}</option>)}</select></label>}
           <label className="f">Ship-from dock / bay<input type="text" value={f.ship_from_dock} onChange={e => set('ship_from_dock', e.target.value)} placeholder="Dock 3" /></label>
           <label className="f">Pickup appointment<input type="datetime-local" value={f.pickup_appt} onChange={e => set('pickup_appt', e.target.value)} /></label>
           <label className="f">Requested ship date<input type="date" value={f.requested_ship_date} onChange={e => set('requested_ship_date', e.target.value)} /></label>
