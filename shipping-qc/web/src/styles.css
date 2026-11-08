@@ -111,6 +111,7 @@ input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--accent); }
 ul.clean { margin: 0; padding-left: 1.1rem; } ul.clean li { margin: .15rem 0; }
 @media (max-width: 1320px) { .hide-md { display: none !important; } }
 @media (max-width: 720px) {
+  .top-in { flex-wrap: wrap; row-gap: 0; padding-top: .35rem; } .brand { margin-right: auto; } .nav { order: 5; flex: 1 1 100%; padding-bottom: .3rem; }
   .nav a { padding: .5rem .6rem; } .main { padding: .8rem .7rem 5rem; } .hide-sm { display: none !important; } .brand span { display: none; }
   .tbl th, .tbl td { padding: .5rem .5rem; }
 }

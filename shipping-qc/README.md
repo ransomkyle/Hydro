@@ -4,6 +4,8 @@ Shipment quality-release and audit system for a stainless steel fabrication shop
 
 Standalone app inside this repo (own `package.json`, own database). The existing SprinkSoft `client/` and `server/` are untouched.
 
+> **Sharing with others?** A nine-page, DAD-branded overview with desktop and phone views is in [docs/DAD-Shipping-QC-Overview.pdf](docs/DAD-Shipping-QC-Overview.pdf).
+
 ## Screenshots (demo data)
 | | |
 |---|---|
