@@ -1,0 +1,25 @@
+{
+  "name": "shipping-qc",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Shipping quality-control release & audit system for a stainless steel fabrication shop",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web \"npm run dev -w server\" \"npm run dev -w web\"",
+    "build": "npm run build -w web && npm run build -w server",
+    "start": "npm run start -w server",
+    "seed": "npm run seed -w server",
+    "test": "npm run test -w server",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web",
+    "backup": "npm run backup -w server",
+    "verify-backup": "npm run verify-backup -w server --",
+    "restore": "npm run restore -w server --",
+    "demo-data": "npm run demo-data -w server --"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
