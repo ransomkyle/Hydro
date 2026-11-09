@@ -151,7 +151,7 @@ export function buildPackage(shipmentId: number, out: Writable): Promise<void> {
 
   const atts = (d.attachments as any[]).filter(a => !a.voided);
   h2('Attached documents');
-  const docs = atts.filter(a => a.mime === 'application/pdf');
+  const docs = atts.filter(a => !a.mime.startsWith('image/'));
   if (!docs.length) doc.font(F.body).fontSize(9).fillColor(mute).text('None.');
   for (const a of docs) doc.font(F.body).fontSize(8.5).fillColor(ink).text(`• [${a.kind}] ${a.filename} — ${fmt(a.uploaded_at)} by ${a.uploaded_by_name}   SHA-256 ${a.sha256.slice(0, 16)}…`);
 

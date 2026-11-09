@@ -16,6 +16,7 @@
 ## QC Inspector
 - You sign items marked “QC inspector+”. **Hold points** (yellow tag) need a *different* QC person to **Verify**.
 - Measurements: pick the **gauge** you used. An out-of-calibration gauge is blocked on purpose.
+- Got a DXF for the part? Attach it on **Photos & docs**, open **preview & features**, and tap **Create inspection items from this drawing**. Check the nominals against the released drawing before you sign.
 - Raise flags for anything wrong; resolve with a disposition (rework / repair / use-as-is / scrap) and your PIN.
 - Open a **CAPA** from a flag when the cause needs fixing, not just the part.
 

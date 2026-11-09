@@ -31,7 +31,7 @@ Without `QC_DEMO=1` it creates a single account **admin / admin1234** — sign i
 
 Demo accounts (password `changeme123`): `admin` `manager` `inspector` `inspector2` `operator` `shipping` `auditor` — PINs `1111 2222 3333 3434 4444 5555 6666`. **Delete or reset these before real use.**
 
-Develop: `npm run dev` (API on :4100, UI on :5174). Tests: `npm test` (35 integration tests). Types: `npm run typecheck`. CI runs typecheck, tests and build on every PR (`.github/workflows/shipping-qc.yml`).
+Develop: `npm run dev` (API on :4100, UI on :5174). Tests: `npm test` (46 integration tests). Types: `npm run typecheck`. CI runs typecheck, tests and build on every PR (`.github/workflows/shipping-qc.yml`).
 
 ## Deploy on the shop network (on-prem)
 
@@ -78,6 +78,7 @@ Develop: `npm run dev` (API on :4100, UI on :5174). Tests: `npm test` (35 integr
 - **Reports**: first-pass release %, on-time pickup %, median time to release, item failure rate, flags by checklist section, escapes (left dock without release), overrides, open/overdue CAPAs and gauges.
 - **CSV import** of jobs from any ERP/Excel export (flexible column names, parts grouped per job, duplicate detection, row-level errors, preview before import).
 - **Labels**: 4×6 shipping label with QR and a big **QC RELEASED / HOLD — NOT RELEASED** status. **Scan** QR/barcodes with the phone camera (Chrome/Android) or any USB/Bluetooth scanner.
+- **CAD drawings (DXF).** Attach a DXF to a shipment to get an inline preview and the features read from it (outside diameter, hole counts and sizes, bolt-circle diameters), then create first-article inspection items from them in one click. Sizes are CAD nominals; tolerances always come from the released drawing. A sample is in `docs/samples/sample-ring-plate.dxf`.
 - **Email alerts** (optional) alongside in-app and webhook alerts, and **email the signed release package to a customer** (after release; audited with a SHA-256 of what was sent).
 - **Optional two-factor sign-in** with any authenticator app.
 - **Dashboard** shows what needs *you* (hold points waiting for your verification) plus overdue CAPAs, out-of-calibration gauges and unapproved templates.

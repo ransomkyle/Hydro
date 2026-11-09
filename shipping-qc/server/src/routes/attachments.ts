@@ -8,6 +8,7 @@ import { audit } from '../audit.js';
 import { authenticate, requireRole } from '../auth.js';
 import { MAX_UPLOAD_MB, UPLOAD_DIR } from '../config.js';
 import { db, nowIso } from '../db.js';
+import { dxfToSvg, looksLikeDxf, parseDxf } from '../dxf.js';
 import { alreadyProcessed, effectiveTime, HttpError, markProcessed, wrap } from '../util.js';
 import { loadDetail } from './shipments.js';
 
@@ -17,7 +18,7 @@ router.use(authenticate);
 // No SVG/HTML: uploaded files are served from the app origin, so only inert types are accepted.
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf']);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_MB * 1024 * 1024, files: 1 } });
-const EXT: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/heic': '.heic', 'image/heif': '.heif', 'application/pdf': '.pdf' };
+const EXT: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/heic': '.heic', 'image/heif': '.heif', 'application/pdf': '.pdf', 'application/dxf': '.dxf' };
 
 function sniff(buf: Buffer, mime: string): boolean {
   const h = buf.subarray(0, 12);
@@ -40,7 +41,14 @@ router.post('/shipments/:id/attachments', requireRole('operator', 'inspector', '
     caption: z.string().max(300).optional(), itemId: z.coerce.number().int().optional(),
     opId: z.string().max(80).optional(), offline: z.enum(['1', '0', 'true', 'false']).optional(), clientAt: z.string().max(40).optional(),
   }).parse(req.body);
-  if (!ALLOWED.has(f.mimetype) || !sniff(f.buffer, f.mimetype)) throw new HttpError(415, 'Only JPEG, PNG, WebP, HEIC photos and PDF documents are allowed');
+  // CAD drawings: browsers label .dxf inconsistently, so decide by extension AND content, then prove it parses.
+  const isDxf = /\.dxf$/i.test(f.originalname) && looksLikeDxf(f.buffer);
+  let dxfNote: any = null;
+  if (isDxf) {
+    try { const r = parseDxf(f.buffer); dxfNote = { units: r.summary.units, outerDia: r.summary.outer?.dia ?? null, holes: r.summary.totalHoles, size: [r.summary.extents.width, r.summary.extents.height] }; }
+    catch (e: any) { throw new HttpError(415, `Could not read this DXF: ${e.message}`); }
+    f.mimetype = 'application/dxf'; b.kind = 'drawing';
+  } else if (!ALLOWED.has(f.mimetype) || !sniff(f.buffer, f.mimetype)) throw new HttpError(415, 'Only JPEG, PNG, WebP, HEIC photos, PDF documents and DXF drawings are allowed');
   if (b.itemId) {
     const it = db.prepare('SELECT shipment_id FROM checklist_items WHERE id=?').get(b.itemId) as any;
     if (!it || it.shipment_id !== shipmentId) throw new HttpError(400, 'Checklist item does not belong to this shipment');
@@ -58,7 +66,7 @@ router.post('/shipments/:id/attachments', requireRole('operator', 'inspector', '
     const r = db.prepare(`INSERT INTO attachments(shipment_id,item_id,kind,filename,mime,size,sha256,stored_as,caption,uploaded_by,uploaded_at,received_at,offline) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(shipmentId, b.itemId ?? null, b.kind, filename, f.mimetype, f.size, sha, stored, b.caption ?? null, req.user!.id, at, nowIso(), offline ? 1 : 0);
     audit({ actor: { id: req.user!.id, name: req.user!.name }, action: 'attachment.add', entity: 'attachment', entityId: Number(r.lastInsertRowid), shipmentId, eventAt: at, offline,
-      detail: { kind: b.kind, filename, mime: f.mimetype, size: f.size, sha256: sha, itemId: b.itemId ?? null, caption: b.caption } });
+      detail: { kind: b.kind, filename, mime: f.mimetype, size: f.size, sha256: sha, itemId: b.itemId ?? null, caption: b.caption, dxf: dxfNote } });
   })();
   res.status(201).json(loadDetail(shipmentId));
 }));
@@ -68,9 +76,10 @@ router.get('/attachments/:id', wrap((req, res) => {
   if (!a) throw new HttpError(404, 'Attachment not found');
   const file = path.join(UPLOAD_DIR, a.stored_as);
   if (!fs.existsSync(file)) throw new HttpError(404, 'File missing on disk');
-  res.setHeader('Content-Type', a.mime);
+  const dxf = a.mime === 'application/dxf';
+  res.setHeader('Content-Type', dxf ? 'application/octet-stream' : a.mime);
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Content-Disposition', `inline; filename="${a.filename.replace(/"/g, '')}"`);
+  res.setHeader('Content-Disposition', `${dxf ? 'attachment' : 'inline'}; filename="${a.filename.replace(/"/g, '')}"`);
   res.setHeader('Cache-Control', 'private, max-age=3600');
   fs.createReadStream(file).pipe(res);
 }));
@@ -84,4 +93,14 @@ router.post('/attachments/:id/void', requireRole('inspector', 'manager', 'admin'
     audit({ actor: { id: req.user!.id, name: req.user!.name }, action: 'attachment.void', entity: 'attachment', entityId: a.id, shipmentId: a.shipment_id, detail: { reason, filename: a.filename, sha256: a.sha256 } });
   })();
   res.json(loadDetail(a.shipment_id));
+}));
+
+/** Feature summary + SVG preview of a DXF drawing attachment. */
+router.get('/attachments/:id/dxf', wrap((req, res) => {
+  const a = db.prepare('SELECT * FROM attachments WHERE id=?').get(Number(req.params.id)) as any;
+  if (!a || a.mime !== 'application/dxf') throw new HttpError(404, 'Not a DXF drawing');
+  const file = path.join(UPLOAD_DIR, a.stored_as);
+  if (!fs.existsSync(file)) throw new HttpError(404, 'File missing on disk');
+  try { const r = parseDxf(fs.readFileSync(file)); res.json({ filename: a.filename, summary: r.summary, svg: dxfToSvg(r) }); }
+  catch (e: any) { throw new HttpError(422, `Could not read this DXF: ${e.message}`); }
 }));

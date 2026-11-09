@@ -248,6 +248,61 @@ describe('two-factor sign-in (TOTP)', () => {
   });
 });
 
+describe('DXF drawings', () => {
+  const circle = (cx: number, cy: number, r: number) => `  0\nCIRCLE\n  8\n0\n 10\n${cx}\n 20\n${cy}\n 30\n0.0\n 40\n${r}\n`;
+  const wrap = (body: string, units = 1) => `  0\nSECTION\n  2\nHEADER\n  9\n$INSUNITS\n 70\n     ${units}\n  0\nENDSEC\n  0\nSECTION\n  2\nENTITIES\n${body}  0\nENDSEC\n  0\nEOF\n`;
+  const ring = () => wrap(circle(0, 0, 4) + circle(0, 0, 2.5) + Array.from({ length: 8 }, (_, k) => circle(3 * Math.cos((k * Math.PI) / 4), 3 * Math.sin((k * Math.PI) / 4), 0.125)).join(''));
+  const upload = async (user: string, name: string, content: string, type = 'application/octet-stream') => {
+    const form = new FormData(); form.append('file', new Blob([content], { type }), name); form.append('kind', 'other');
+    return fetch(`${base}/api/shipments/${shipId}/attachments`, { method: 'POST', headers: { authorization: `Bearer ${tokens[user]}` }, body: form });
+  };
+  let dxfId = 0; let pdfId = 0;
+
+  it('parses circles, arcs, lines and polylines and finds features', async () => {
+    const { parseDxf, dxfToSvg, inspectionItems } = await import('../src/dxf.js');
+    const r = parseDxf(Buffer.from(ring()));
+    assert.equal(r.summary.units, 'in'); assert.ok(Math.abs(r.summary.outer!.dia - 8) < 1e-9);
+    assert.deepEqual(r.summary.concentric.map(c => c.dia), [5]);
+    const g = r.summary.holeGroups[0]; assert.equal(g.count, 8); assert.equal(g.pattern, 'bolt_circle'); assert.ok(Math.abs(g.pcd! - 6) < 1e-6); assert.equal(g.evenlySpaced, true);
+    assert.match(dxfToSvg(r), /^<svg /);
+    const items = inspectionItems(r.summary); assert.ok(items.some(i => /Outside diameter/.test(i.text)) && items.some(i => /Bolt circle/.test(i.text)) && items.some(i => /Hole count — 8/.test(i.text)));
+    assert.ok(items.every(i => !/±/.test(i.spec)), 'tolerances are never invented');
+    const plate = wrap(`  0\nLWPOLYLINE\n  8\n0\n 90\n4\n 70\n1\n 10\n0\n 20\n0\n 10\n10\n 20\n0\n 10\n10\n 20\n5\n 10\n0\n 20\n5\n` + circle(2, 2.5, 0.5) + `  0\nARC\n  8\n0\n 10\n10\n 20\n2.5\n 30\n0\n 40\n1\n 50\n270\n 51\n90\n` + `  0\nHATCH\n  8\n0\n`, 4);
+    const p = parseDxf(Buffer.from(plate)); assert.equal(p.summary.units, 'mm'); assert.ok(Math.abs(p.summary.extents.width - 11) < 1e-6, 'arc bulges past the plate edge'); assert.equal(p.summary.unsupported.HATCH, 1);
+    assert.throws(() => parseDxf(Buffer.from(wrap(''))), /No drawable geometry/);
+  });
+  it('accepts a real DXF as a drawing even when the browser calls it octet-stream, and rejects fakes', async () => {
+    const ok = await upload('inspector', 'ring-plate.dxf', ring()); assert.equal(ok.status, 201);
+    const d = (await ok.json()) as any; const att = d.attachments.find((a: any) => a.filename === 'ring-plate.dxf');
+    assert.equal(att.mime, 'application/dxf'); assert.equal(att.kind, 'drawing'); dxfId = att.id;
+    assert.equal((await upload('inspector', 'evil.dxf', '<script>alert(1)</script>', 'text/html')).status, 415, 'HTML renamed .dxf');
+    assert.equal((await upload('inspector', 'notes.txt', ring())).status, 415, 'wrong extension');
+    assert.equal((await upload('inspector', 'empty.dxf', wrap(''))).status, 415, 'valid DXF with no geometry');
+  });
+  it('serves a preview + summary and downloads (never inline)', async () => {
+    const r = await api('GET', `/api/attachments/${dxfId}/dxf`, 'operator');
+    assert.equal(r.status, 200); assert.equal(r.body.summary.totalHoles, 8); assert.match(r.body.svg, /^<svg /);
+    const raw = await api('GET', `/api/attachments/${dxfId}`, 'operator', undefined, true) as Response;
+    assert.match(raw.headers.get('content-disposition') ?? '', /^attachment/); assert.equal(raw.headers.get('content-type'), 'application/octet-stream');
+    const pdf = await upload('inspector', 'report.pdf', '%PDF-1.4\n%fake\n', 'application/pdf'); assert.equal(pdf.status, 201);
+    pdfId = ((await pdf.json()) as any).attachments.find((a: any) => a.filename === 'report.pdf').id;
+    assert.equal((await api('GET', `/api/attachments/${pdfId}/dxf`, 'operator')).status, 404, 'a non-DXF attachment');
+  });
+  it('turns drawing features into inspection items, once, for QC staff only', async () => {
+    assert.equal((await api('POST', `/api/shipments/${shipId}/checklist-from-dxf`, 'operator', { attachmentId: dxfId })).status, 403);
+    const before = (await api('GET', `/api/shipments/${shipId}`, 'manager')).body.items.length;
+    const r = await api('POST', `/api/shipments/${shipId}/checklist-from-dxf`, 'inspector', { attachmentId: dxfId });
+    assert.equal(r.status, 200); const added = r.body.items.filter((i: any) => i.source === `dxf:${dxfId}`);
+    assert.equal(r.body.items.length, before + added.length); assert.ok(added.length >= 5);
+    assert.ok(added.every((i: any) => /^Drawing features/.test(i.section) && i.signer_role === 'inspector' && i.required === 1));
+    assert.ok(added.some((i: any) => i.text === 'Outside diameter' && /Ø8 in/.test(i.spec)));
+    assert.equal((await api('POST', `/api/shipments/${shipId}/checklist-from-dxf`, 'inspector', { attachmentId: dxfId })).status, 409, 'no duplicates');
+    assert.equal((await api('POST', `/api/shipments/${shipId}/checklist-from-dxf`, 'inspector', { attachmentId: pdfId })).status, 400, 'not a DXF');
+    const log = (await api('GET', `/api/shipments/${shipId}/audit`, 'manager')).body;
+    assert.ok(log.some((a: any) => a.action === 'checklist.add_from_dxf'));
+  });
+});
+
 describe('label', () => {
   it('prints a PDF label with a hold status until released', async () => {
     const r = await api('GET', `/api/shipments/${shipId}/label.pdf`, 'shipping', undefined, true) as Response;

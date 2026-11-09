@@ -2,7 +2,10 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { audit, type Actor } from '../audit.js';
 import { authenticate, canSignRole, getUser, requireRole, verifyOfflineProof, verifyPinOnline, type User } from '../auth.js';
-import { PLANTS, REQUIRE_APPROVED_TEMPLATES } from '../config.js';
+import { PLANTS, REQUIRE_APPROVED_TEMPLATES, UPLOAD_DIR } from '../config.js';
+import { inspectionItems, parseDxf } from '../dxf.js';
+import fs from 'node:fs';
+import path from 'node:path';
 import { db, nowIso } from '../db.js';
 import { notifyRoles } from '../notify.js';
 import { readiness } from '../readiness.js';
@@ -229,6 +232,25 @@ router.post('/:id/checklist', qcStaff, wrap((req, res) => {
     audit({ actor: actorOf(req.user!), action: 'checklist.add_item', entity: 'checklist_item', entityId: Number(r.lastInsertRowid), shipmentId: id, detail: d });
   })();
   res.status(201).json(loadDetail(id));
+}));
+
+router.post('/:id/checklist-from-dxf', qcStaff, wrap((req, res) => {
+  const id = Number(req.params.id); assertEditable(getShipment(id));
+  const { attachmentId } = z.object({ attachmentId: z.number().int() }).parse(req.body);
+  const a = db.prepare('SELECT * FROM attachments WHERE id=? AND shipment_id=? AND voided=0').get(attachmentId, id) as any;
+  if (!a || a.mime !== 'application/dxf') throw new HttpError(400, 'Choose a DXF drawing attached to this shipment');
+  const source = `dxf:${a.id}`;
+  if (db.prepare('SELECT 1 FROM checklist_items WHERE shipment_id=? AND source=? LIMIT 1').get(id, source)) throw new HttpError(409, 'Inspection items were already created from this drawing');
+  let summary; try { summary = parseDxf(fs.readFileSync(path.join(UPLOAD_DIR, a.stored_as))).summary; } catch (e: any) { throw new HttpError(422, `Could not read this DXF: ${e.message}`); }
+  const items = inspectionItems(summary);
+  const section = `Drawing features — ${a.filename.slice(0, 50)}`;
+  db.transaction(() => {
+    let seq = (db.prepare('SELECT COALESCE(MAX(seq),0) m FROM checklist_items WHERE shipment_id=?').get(id) as any).m;
+    const ins = db.prepare(`INSERT INTO checklist_items(shipment_id,seq,section,text,kind,unit,spec,reference,required,signer_role,needs_verification,source) VALUES (?,?,?,?,?,?,?,?,1,'inspector',0,?)`);
+    for (const i of items) ins.run(id, ++seq, section, i.text, i.kind, i.unit ?? null, i.spec, 'CAD nominals — verify against released drawing revision', source);
+    audit({ actor: actorOf(req.user!), action: 'checklist.add_from_dxf', entity: 'shipment', entityId: id, shipmentId: id, detail: { attachment: a.filename, sha256: a.sha256, items: items.length, units: summary.units, outerDia: summary.outer?.dia ?? null, holes: summary.totalHoles } });
+  })();
+  res.json(loadDetail(id));
 }));
 
 router.post('/:id/apply-templates', qcStaff, wrap((req, res) => {
